@@ -261,6 +261,57 @@
   .period-status-card.open { border-color: var(--success); background: var(--success-light); }
   .period-status-card.closed { border-color: #6b7280; background: #f9fafb; }
 
+  /* ===== KONEKSI INDICATOR ===== */
+  .conn-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; border: none; white-space: nowrap;
+  }
+  .conn-badge:hover { opacity: 0.85; transform: scale(0.98); }
+  .conn-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .conn-connected { background: #d1fae5; color: #065f3a; }
+  .conn-connected .conn-dot { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.3); animation: pulse 2s infinite; }
+  .conn-disconnected { background: #fde8e8; color: #9b1919; }
+  .conn-disconnected .conn-dot { background: #ef4444; }
+  .conn-checking { background: #fef3c7; color: #92400e; }
+  .conn-checking .conn-dot { background: #f59e0b; animation: pulse 0.8s infinite; }
+  .conn-notset { background: #f3f4f6; color: #6b7280; }
+  .conn-notset .conn-dot { background: #9ca3af; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ===== SYNC LOG ===== */
+  .sync-log-bar {
+    background: #0f172a; color: #94a3b8; font-size: 0.72rem; font-family: monospace;
+    padding: 6px 16px; display: flex; align-items: center; gap: 10px;
+    border-top: 1px solid rgba(255,255,255,0.08); min-height: 30px;
+  }
+  .sync-log-bar .log-label { color: #64748b; flex-shrink: 0; }
+  .sync-log-bar .log-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sync-log-bar .log-time { color: #475569; flex-shrink: 0; }
+  .log-ok { color: #4ade80 !important; }
+  .log-err { color: #f87171 !important; }
+  .log-warn { color: #fbbf24 !important; }
+
+  /* ===== KONEKSI PANEL ===== */
+  .conn-panel {
+    background: white; border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; margin-bottom: 20px;
+  }
+  .conn-panel-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .conn-step {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px; border-radius: 8px; background: #f8fafc;
+    border: 1px solid var(--border); margin-bottom: 8px;
+  }
+  .conn-step-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
+  .conn-step-label { font-weight: 600; font-size: 0.85rem; }
+  .conn-step-desc { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+  .conn-step.ok { border-color: #10b981; background: #f0fdf4; }
+  .conn-step.err { border-color: #ef4444; background: #fef2f2; }
+  .conn-step.pending { border-color: #f59e0b; background: #fffbeb; }
+
   /* ===== PRINT ===== */
   @media print {
     .sidebar, .topbar, .no-print { display: none !important; }
@@ -357,11 +408,20 @@
         <div class="nav-item" onclick="showMenu('pengaturan')">
           <span class="nav-icon">⚙️</span> Pengaturan
         </div>
+        <div class="nav-item" onclick="showMenu('koneksi')" id="navKoneksi">
+          <span class="nav-icon">🔗</span> Status Koneksi
+          <span id="sidebarConnDot" style="width:8px;height:8px;border-radius:50%;background:#9ca3af;margin-left:auto;flex-shrink:0;"></span>
+        </div>
       </nav>
       <div class="sidebar-footer">
         <div class="logout-btn" onclick="doLogout()">
           <span>🚪</span> Keluar dari Sistem
         </div>
+      </div>
+      <div class="sync-log-bar">
+        <span class="log-label">SYNC</span>
+        <span class="log-text" id="syncLogText">Menunggu koneksi...</span>
+        <span class="log-time" id="syncLogTime"></span>
       </div>
     </aside>
 
@@ -372,7 +432,13 @@
           <div class="topbar-title" id="pageTitle">Dashboard</div>
           <div class="topbar-subtitle" id="pageSubtitle">Selamat datang di Sistem Arisan</div>
         </div>
-        <div style="font-size:0.8rem;color:var(--text-muted);" id="currentDate"></div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div style="font-size:0.8rem;color:var(--text-muted);" id="currentDate"></div>
+          <button class="conn-badge conn-notset" id="connBadge" onclick="showMenu('koneksi')" title="Klik untuk lihat status koneksi Google Sheets">
+            <span class="conn-dot"></span>
+            <span id="connBadgeText">GAS: Belum Dikonfigurasi</span>
+          </button>
+        </div>
       </div>
 
       <div class="content">
@@ -821,6 +887,102 @@
           </div>
         </div>
 
+        <!-- ===== STATUS KONEKSI ===== -->
+        <div id="menu-koneksi" class="menu-section">
+          <!-- Banner Status Utama -->
+          <div id="connBannerOK" class="conn-panel" style="display:none;border-color:#10b981;background:linear-gradient(135deg,#f0fdf4,#dcfce7);">
+            <div style="display:flex;align-items:center;gap:14px;">
+              <span style="font-size:2.5rem;">✅</span>
+              <div>
+                <div style="font-weight:800;font-size:1.1rem;color:#065f3a;">Terhubung ke Google Sheets</div>
+                <div style="font-size:0.85rem;color:#16a34a;margin-top:2px;">Data web aplikasi dan database Google Spreadsheet sedang tersinkronisasi secara real-time.</div>
+              </div>
+            </div>
+          </div>
+          <div id="connBannerFail" class="conn-panel" style="display:none;border-color:#ef4444;background:linear-gradient(135deg,#fef2f2,#fee2e2);">
+            <div style="display:flex;align-items:center;gap:14px;">
+              <span style="font-size:2.5rem;">❌</span>
+              <div>
+                <div style="font-weight:800;font-size:1.1rem;color:#9b1919;">Tidak Terhubung ke Google Sheets</div>
+                <div style="font-size:0.85rem;color:#dc2626;margin-top:2px;">Aplikasi berjalan dalam mode offline. Data tersimpan di browser, tetapi belum tersinkronisasi ke Google Spreadsheet.</div>
+              </div>
+            </div>
+          </div>
+          <div id="connBannerNotSet" class="conn-panel" style="border-color:#9ca3af;background:linear-gradient(135deg,#f9fafb,#f3f4f6);">
+            <div style="display:flex;align-items:center;gap:14px;">
+              <span style="font-size:2.5rem;">⚙️</span>
+              <div>
+                <div style="font-weight:800;font-size:1.1rem;color:#374151;">GAS URL Belum Dikonfigurasi</div>
+                <div style="font-size:0.85rem;color:#6b7280;margin-top:2px;">Masukkan URL Google Apps Script di bawah ini agar aplikasi dapat terhubung ke Google Sheets.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Input GAS URL -->
+          <div class="card" style="margin-bottom:20px;">
+            <div class="card-header"><span class="card-title">🔗 Konfigurasi URL Google Apps Script</span></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>URL Web App GAS</label>
+                <input type="text" id="gasUrlInput" placeholder="https://script.google.com/macros/s/AKfycbzhBUlB9hknZwtbdu3ccc6pZE84NOHfPP3CaH-iZinvxxA_7bp81vlmgQPm1NYsq07l3w/exec" style="font-family:monospace;font-size:0.82rem;">
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="simpanGasUrl()">💾 Simpan & Test Koneksi</button>
+                <button class="btn btn-outline" onclick="testKoneksi()">🔄 Test Koneksi Ulang</button>
+                <button class="btn btn-secondary" onclick="resetGasUrl()">🗑️ Hapus URL</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Checklist Diagnostik -->
+          <div class="card" style="margin-bottom:20px;">
+            <div class="card-header"><span class="card-title">🔍 Diagnostik Koneksi</span></div>
+            <div class="card-body" style="padding:16px;">
+              <div class="conn-step" id="diagStep1">
+                <span class="conn-step-icon">⬜</span>
+                <div>
+                  <div class="conn-step-label">1. GAS URL Tersimpan</div>
+                  <div class="conn-step-desc">URL Google Apps Script sudah dimasukkan dan disimpan</div>
+                </div>
+              </div>
+              <div class="conn-step" id="diagStep2">
+                <span class="conn-step-icon">⬜</span>
+                <div>
+                  <div class="conn-step-label">2. Server GAS Merespons</div>
+                  <div class="conn-step-desc">Melakukan ping ke endpoint GAS untuk memastikan Web App aktif</div>
+                </div>
+              </div>
+              <div class="conn-step" id="diagStep3">
+                <span class="conn-step-icon">⬜</span>
+                <div>
+                  <div class="conn-step-label">3. Google Sheets Dapat Dibaca</div>
+                  <div class="conn-step-desc">GAS berhasil mengakses dan membaca data dari Spreadsheet</div>
+                </div>
+              </div>
+              <div class="conn-step" id="diagStep4">
+                <span class="conn-step-icon">⬜</span>
+                <div>
+                  <div class="conn-step-label">4. Sinkronisasi Data Berhasil</div>
+                  <div class="conn-step-desc">Data dari web aplikasi berhasil dikirim dan ditulis ke Google Sheets</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Log Sync -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📜 Log Sinkronisasi</span>
+              <button class="btn btn-secondary" style="padding:5px 12px;font-size:0.8rem;" onclick="clearSyncLog()">🗑️ Hapus Log</button>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div style="background:#0f172a;border-radius:0 0 10px 10px;padding:12px;font-family:monospace;font-size:0.78rem;min-height:160px;max-height:300px;overflow-y:auto;" id="syncLogPanel">
+                <div style="color:#475569;">— Log sinkronisasi akan muncul di sini —</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div><!-- /content -->
     </main>
   </div>
@@ -846,8 +1008,9 @@
 
 <script>
 // ==================== GAS CONFIG ====================
-// Ganti URL ini dengan URL Google Apps Script Anda yang sudah di-deploy sebagai Web App
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzhBUlB9hknZwtbdu3ccc6pZE84NOHfPP3CaH-iZinvxxA_7bp81vlmgQPm1NYsq07l3w/exec';
+let GAS_URL = localStorage.getItem('gasUrl') || '';
+let connStatus = GAS_URL ? 'notset' : 'notset'; // notset | checking | connected | disconnected
+let syncLog = JSON.parse(localStorage.getItem('syncLog') || '[]');
 
 // ==================== LOCAL DB (in-memory + localStorage sync) ====================
 let db = {
@@ -886,9 +1049,83 @@ function saveDB() {
   syncToGAS();
 }
 
+// ==================== CONNECTION INDICATOR ====================
+function setConnStatus(status, msg) {
+  connStatus = status;
+  const badge = document.getElementById('connBadge');
+  const badgeText = document.getElementById('connBadgeText');
+  const dot = document.getElementById('sidebarConnDot');
+  if (!badge) return;
+  badge.className = 'conn-badge conn-' + status;
+  const labels = {
+    connected: '🟢 GAS: Terhubung',
+    disconnected: '🔴 GAS: Terputus',
+    checking: '🟡 GAS: Mengecek...',
+    notset: '⚫ GAS: Belum Diatur'
+  };
+  badgeText.textContent = labels[status] || status;
+  const dotColors = { connected:'#10b981', disconnected:'#ef4444', checking:'#f59e0b', notset:'#9ca3af' };
+  if (dot) dot.style.background = dotColors[status] || '#9ca3af';
+  // Update banners if on koneksi page
+  const banners = ['connBannerOK','connBannerFail','connBannerNotSet'];
+  banners.forEach(b => { const el=document.getElementById(b); if(el) el.style.display='none'; });
+  const map = { connected:'connBannerOK', disconnected:'connBannerFail', notset:'connBannerNotSet', checking:'connBannerNotSet' };
+  const showBanner = document.getElementById(map[status]);
+  if (showBanner) showBanner.style.display = 'block';
+  // Update sidebar log bar
+  const logEl = document.getElementById('syncLogText');
+  const logTime = document.getElementById('syncLogTime');
+  if (logEl && msg) { logEl.textContent = msg; logEl.className = 'log-text ' + (status==='connected'?'log-ok':status==='disconnected'?'log-err':'log-warn'); }
+  if (logTime) logTime.textContent = new Date().toLocaleTimeString('id-ID');
+}
+
+function addSyncLog(type, msg) {
+  const time = new Date().toLocaleTimeString('id-ID');
+  const entry = { type, msg, time };
+  syncLog.unshift(entry);
+  if (syncLog.length > 50) syncLog.pop();
+  localStorage.setItem('syncLog', JSON.stringify(syncLog));
+  // Update panel if visible
+  const panel = document.getElementById('syncLogPanel');
+  if (panel) renderSyncLog();
+  // Update sidebar bar
+  const logEl = document.getElementById('syncLogText');
+  const logTime = document.getElementById('syncLogTime');
+  if (logEl) { logEl.textContent = msg; logEl.className = 'log-text log-' + type; }
+  if (logTime) logTime.textContent = time;
+}
+
+function renderSyncLog() {
+  const panel = document.getElementById('syncLogPanel');
+  if (!panel) return;
+  if (!syncLog.length) { panel.innerHTML = '<div style="color:#475569;">— Belum ada log —</div>'; return; }
+  panel.innerHTML = syncLog.map(l => {
+    const clr = { ok:'#4ade80', err:'#f87171', warn:'#fbbf24', info:'#94a3b8' }[l.type] || '#94a3b8';
+    const pfx = { ok:'[OK]', err:'[ERR]', warn:'[WARN]', info:'[INFO]' }[l.type] || '[LOG]';
+    return `<div style="margin-bottom:4px;"><span style="color:#475569;">${l.time}</span> <span style="color:${clr};font-weight:700;">${pfx}</span> <span style="color:#cbd5e1;">${l.msg}</span></div>`;
+  }).join('');
+}
+
+function setDiagStep(step, status) {
+  // status: pending | ok | err
+  const el = document.getElementById('diagStep' + step);
+  if (!el) return;
+  el.className = 'conn-step ' + (status==='ok'?'ok':status==='err'?'err':'pending');
+  const iconEl = el.querySelector('.conn-step-icon');
+  const icons = { ok:'✅', err:'❌', pending:'⏳' };
+  if (iconEl) iconEl.textContent = icons[status] || '⬜';
+}
+
+function resetDiagSteps() {
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById('diagStep'+i);
+    if (el) { el.className = 'conn-step'; el.querySelector('.conn-step-icon').textContent = '⬜'; }
+  });
+}
+
 // ==================== GAS SYNC ====================
 async function syncToGAS(action, data) {
-  if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  if (!GAS_URL) return;
   try {
     await fetch(GAS_URL, {
       method: 'POST',
@@ -896,28 +1133,101 @@ async function syncToGAS(action, data) {
       mode: 'no-cors',
       body: JSON.stringify({ action: action || 'syncAll', data: data || db })
     });
+    addSyncLog('ok', 'Data berhasil dikirim ke Google Sheets');
+    setConnStatus('connected', 'Sinkronisasi sukses');
+    setDiagStep(4, 'ok');
   } catch(e) {
-    console.warn('GAS sync failed (offline mode):', e);
+    addSyncLog('err', 'Gagal kirim ke Google Sheets: ' + e.message);
+    setConnStatus('disconnected', 'Gagal sinkronisasi: ' + e.message);
+    setDiagStep(4, 'err');
   }
 }
 
 async function loadFromGAS() {
-  if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  if (!GAS_URL) {
+    addSyncLog('warn', 'GAS URL belum dikonfigurasi, menggunakan data lokal');
+    setConnStatus('notset', 'GAS URL belum diatur');
+    return;
+  }
+  setConnStatus('checking', 'Menghubungkan ke Google Sheets...');
+  addSyncLog('info', 'Mencoba koneksi ke: ' + GAS_URL.substring(0,50)+'...');
+  setDiagStep(1, 'ok');
+  setDiagStep(2, 'pending');
   try {
     const res = await fetch(GAS_URL + '?action=getAll');
+    setDiagStep(2, 'ok');
+    addSyncLog('ok', 'Server GAS merespons (HTTP ' + res.status + ')');
+    setDiagStep(3, 'pending');
     const data = await res.json();
-    if (data && data.anggota) {
-      db.anggota = data.anggota;
-      db.penerimaArisan = data.penerimaArisan;
-      db.setoranArisan = data.setoranArisan;
-      db.pengeluaran = data.pengeluaran;
+    if (data && data.anggota !== undefined) {
+      setDiagStep(3, 'ok');
+      db.anggota = data.anggota || db.anggota;
+      db.penerimaArisan = data.penerimaArisan || db.penerimaArisan;
+      db.setoranArisan = data.setoranArisan || db.setoranArisan;
+      db.pengeluaran = data.pengeluaran || db.pengeluaran;
       db.users = data.users || db.users;
       db.periodestatus = data.periodestatus || {};
       localStorage.setItem('arisanDB', JSON.stringify(db));
+      setDiagStep(4, 'ok');
+      setConnStatus('connected', 'Data berhasil dimuat dari Google Sheets');
+      addSyncLog('ok', `Load sukses: ${db.anggota.length} anggota, ${db.setoranArisan.length} transaksi`);
+    } else {
+      setDiagStep(3, 'err');
+      setConnStatus('disconnected', 'GAS merespons tapi data tidak valid');
+      addSyncLog('warn', 'GAS merespons tapi struktur data tidak dikenali. Cek kode GAS Anda.');
     }
   } catch(e) {
-    console.warn('Load dari GAS gagal, menggunakan data lokal');
+    setDiagStep(2, 'err');
+    setConnStatus('disconnected', 'Gagal terhubung: ' + e.message);
+    addSyncLog('err', 'Koneksi gagal: ' + e.message + ' — menggunakan data lokal');
   }
+}
+
+// ==================== KONEKSI MANAGEMENT ====================
+function simpanGasUrl() {
+  const url = document.getElementById('gasUrlInput').value.trim();
+  if (!url) { toast('Masukkan URL GAS terlebih dahulu!', 'error'); return; }
+  if (!url.startsWith('https://script.google.com')) {
+    toast('URL tidak valid. Harus dimulai dengan https://script.google.com', 'error'); return;
+  }
+  GAS_URL = url;
+  localStorage.setItem('gasUrl', url);
+  addSyncLog('info', 'URL GAS disimpan: ' + url.substring(0,50)+'...');
+  toast('URL disimpan! Mencoba test koneksi...', 'success');
+  testKoneksi();
+}
+
+function resetGasUrl() {
+  GAS_URL = '';
+  localStorage.removeItem('gasUrl');
+  document.getElementById('gasUrlInput').value = '';
+  setConnStatus('notset', 'GAS URL dihapus');
+  resetDiagSteps();
+  addSyncLog('warn', 'GAS URL dihapus. Aplikasi kembali ke mode offline.');
+  toast('URL GAS dihapus. Aplikasi berjalan offline.', 'warning');
+}
+
+async function testKoneksi() {
+  if (!GAS_URL) { toast('Masukkan URL GAS terlebih dahulu!', 'error'); return; }
+  resetDiagSteps();
+  addSyncLog('info', 'Memulai diagnostik koneksi...');
+  setDiagStep(1, 'ok');
+  setDiagStep(2, 'pending');
+  setConnStatus('checking', 'Menjalankan diagnostik...');
+  await loadFromGAS();
+  refreshSyncLogPanel();
+}
+
+function refreshSyncLogPanel() {
+  renderSyncLog();
+  if (GAS_URL) document.getElementById('gasUrlInput').value = GAS_URL;
+}
+
+function clearSyncLog() {
+  syncLog = [];
+  localStorage.removeItem('syncLog');
+  renderSyncLog();
+  addSyncLog('info', 'Log dibersihkan');
 }
 
 // ==================== FORMAT HELPERS ====================
@@ -972,6 +1282,9 @@ function doLogin() {
   document.getElementById('keluarTanggal').value = today();
   // Load from GAS first, then refresh UI
   loadFromGAS().then(() => { refreshAll(); });
+  // Init connection badge state
+  if (!GAS_URL) setConnStatus('notset', 'GAS URL belum dikonfigurasi');
+  else setConnStatus('checking', 'Menghubungkan...');
   // Control admin-only tabs
   if (currentUser.username !== 'Administrator') {
     document.getElementById('tabManajemenUser').style.opacity = '0.4';
@@ -996,12 +1309,13 @@ function showMenu(menu) {
   document.querySelectorAll('.menu-section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('menu-' + menu).classList.add('active');
-  const navMap = { dashboard:'Dashboard', anggota:'Data Anggota', inputArisan:'Input Data Arisan', prosesPeriode:'Proses Periode', pengeluaran:'Pengeluaran', laporan:'Laporan', pengaturan:'Pengaturan' };
-  const subtitleMap = { dashboard:'Statistik dan ringkasan data', anggota:'Kelola keanggotaan arisan', inputArisan:'Catat transaksi setoran', prosesPeriode:'Kunci/buka periode angkatan', pengeluaran:'Catat operasional keuangan', laporan:'Rekap dan dokumentasi', pengaturan:'Konfigurasi akun & user' };
+  const navMap = { dashboard:'Dashboard', anggota:'Data Anggota', inputArisan:'Input Data Arisan', prosesPeriode:'Proses Periode', pengeluaran:'Pengeluaran', laporan:'Laporan', pengaturan:'Pengaturan', koneksi:'Status Koneksi Google Sheets' };
+  const subtitleMap = { dashboard:'Statistik dan ringkasan data', anggota:'Kelola keanggotaan arisan', inputArisan:'Catat transaksi setoran', prosesPeriode:'Kunci/buka periode angkatan', pengeluaran:'Catat operasional keuangan', laporan:'Rekap dan dokumentasi', pengaturan:'Konfigurasi akun & user', koneksi:'Monitor & kelola koneksi ke Google Spreadsheet' };
   document.getElementById('pageTitle').textContent = navMap[menu] || menu;
   document.getElementById('pageSubtitle').textContent = subtitleMap[menu] || '';
   const items = document.querySelectorAll('.nav-item');
   items.forEach(i => { if (i.getAttribute('onclick') && i.getAttribute('onclick').includes(menu)) i.classList.add('active'); });
+  if (menu === 'koneksi') { refreshSyncLogPanel(); }
   if (menu === 'dashboard') refreshDashboard();
   if (menu === 'anggota') { refreshHapusAnggotaSelect(); refreshDaftarAnggota(); }
   if (menu === 'inputArisan') { refreshInputAngkatan(); refreshPenerimaDropdown(); refreshPenyetorDropdown(); refreshRiwayatSetoran(); }
