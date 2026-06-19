@@ -1,516 +1,1644 @@
-<!--
-Aplikasi Arisan - Single file web app (index.html)
-+ Google Apps Script backend (Code.gs) included below.
-
-Cara pakai singkat:
-1) Buat Google Spreadsheet baru. Buat sheet: "Users", "MasterData", "DataInput", "Pengeluaran".
-2) Masukkan header (baris 1) pada tiap sheet sesuai petunjuk di bagian GAS.
-3) Buat Google Apps Script project, ganti CONTENT_SPREADSHEET_ID pada Code.gs dengan ID spreadsheet Anda, paste Code.gs, simpan.
-4) Deploy > New deployment > type: Web app. Access: Anyone (atau hanya domain). Execute as: Me. Salin URL web app.
-5) Pada index.html ganti `const scriptURL = "PASTE_YOUR_WEBAPP_URL_HERE";`
-6) Buka index.html di server statis atau double-click (modern browsers block some fetch() from file:// — sebaiknya pakai Live Server atau hosting). Untuk akses dari mana saja, host index.html (GitHub Pages, Firebase Hosting, Netlify) atau gunakan Google Drive hosting yang sesuai.
-
-Default user admin:
-- username: admin
-- password: admin123
-
-NOTE: Untuk produksi, gunakan HTTPS hosting, dan atur izin spreadsheet dengan benar.
--->
-
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Aplikasi Arisan</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root{
-      --bg:#0f1724; /* dark navy */
-      --card:#0b1220;
-      --accent:#7c3aed; /* purple */
-      --accent-2:#06b6d4; /* teal */
-      --muted:#98a0ad;
-      --glass: rgba(255,255,255,0.03);
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;background:linear-gradient(180deg,#061226 0%, #071a2a 100%);color:#e6eef8;margin:0}
-    .container{max-width:1100px;margin:28px auto;padding:18px}
-    .card{background:var(--card);border-radius:14px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.6);}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aplikasi Arisan Terintegrasi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root {
+    --primary: #1a56db;
+    --primary-dark: #1341b3;
+    --primary-light: #e8f0fe;
+    --success: #0a7c4a;
+    --success-light: #d1fae5;
+    --danger: #c81e1e;
+    --danger-light: #fde8e8;
+    --warning: #9f580a;
+    --warning-light: #fef3c7;
+    --bg: #f0f4f8;
+    --surface: #ffffff;
+    --sidebar: #1e2a3a;
+    --sidebar-hover: #2d3f55;
+    --sidebar-active: #1a56db;
+    --text: #1a202c;
+    --text-muted: #6b7280;
+    --border: #e2e8f0;
+    --radius: 10px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
 
-    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
-    header h1{font-size:20px;margin:0}
-    .brand{display:flex;gap:12px;align-items:center}
-    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:800}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-    /* Layout */
-    .grid{display:grid;grid-template-columns:280px 1fr;gap:16px}
-    nav{padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent)}
-    nav .menu{display:flex;flex-direction:column;gap:6px}
-    .btn{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.03);cursor:pointer}
-    .btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:white;border:none}
-    .muted{color:var(--muted);font-size:13px}
+  /* ===== LOGIN ===== */
+  #loginPage {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #0f1f3d 0%, #1a56db 100%);
+  }
+  .login-card {
+    background: white; border-radius: 16px; padding: 48px 40px;
+    width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .login-logo { text-align: center; margin-bottom: 32px; }
+  .login-logo .icon { font-size: 48px; margin-bottom: 8px; }
+  .login-logo h1 { font-size: 1.6rem; font-weight: 700; color: var(--primary); }
+  .login-logo p { color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; }
+  .form-group { margin-bottom: 20px; }
+  .form-group label { display: block; font-weight: 600; font-size: 0.875rem; margin-bottom: 6px; color: var(--text); }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
+    border-radius: 8px; font-size: 0.95rem; transition: border 0.2s;
+    background: white; color: var(--text);
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,0.15);
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 20px; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; border: none; transition: all 0.2s; text-decoration: none;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-success:hover { background: #065f3a; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-danger:hover { background: #9b1919; }
+  .btn-outline { background: white; color: var(--primary); border: 1.5px solid var(--primary); }
+  .btn-outline:hover { background: var(--primary-light); }
+  .btn-secondary { background: #6b7280; color: white; }
+  .btn-secondary:hover { background: #4b5563; }
+  .btn-warning { background: #d97706; color: white; }
+  .btn-warning:hover { background: #b45309; }
+  .btn-full { width: 100%; justify-content: center; padding: 12px; font-size: 1rem; }
+  .error-box {
+    background: var(--danger-light); border: 1px solid #fca5a5;
+    color: var(--danger); border-radius: 8px; padding: 10px 14px;
+    font-size: 0.875rem; margin-bottom: 16px; display: none;
+  }
 
-    /* Forms */
-    label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
-    input[type=text],select,input[type=number],input[type=password],input[type=date]{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit}
-    .row{display:flex;gap:12px}
-    .col{flex:1}
-    .small{width:120px}
+  /* ===== APP LAYOUT ===== */
+  #appPage { display: none; min-height: 100vh; }
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; min-width: 240px; background: var(--sidebar);
+    display: flex; flex-direction: column; position: fixed; top: 0; left: 0;
+    height: 100vh; z-index: 100; overflow-y: auto;
+  }
+  .sidebar-header {
+    padding: 20px 16px; border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sidebar-header .app-icon { font-size: 24px; }
+  .sidebar-header .app-title { color: white; font-weight: 700; font-size: 1rem; line-height: 1.2; }
+  .sidebar-header .app-subtitle { color: rgba(255,255,255,0.5); font-size: 0.75rem; }
+  .sidebar-user {
+    padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .user-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--primary); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.85rem; flex-shrink: 0;
+  }
+  .user-info .name { color: white; font-weight: 600; font-size: 0.875rem; }
+  .user-info .role { color: rgba(255,255,255,0.5); font-size: 0.75rem; }
+  .nav-section { padding: 10px 0; flex: 1; }
+  .nav-label {
+    padding: 6px 16px 4px; font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.08em; color: rgba(255,255,255,0.35); font-weight: 600;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; color: rgba(255,255,255,0.7);
+    cursor: pointer; transition: all 0.15s; font-size: 0.875rem; font-weight: 500;
+    border-left: 3px solid transparent;
+  }
+  .nav-item:hover { background: var(--sidebar-hover); color: white; }
+  .nav-item.active { background: rgba(26,86,219,0.25); color: white; border-left-color: var(--primary); font-weight: 600; }
+  .nav-item .nav-icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
+  .sidebar-footer { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.1); }
+  .logout-btn {
+    display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,0.6);
+    cursor: pointer; font-size: 0.875rem; padding: 8px; border-radius: 6px;
+    transition: all 0.15s; width: 100%;
+  }
+  .logout-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 
-    /* Table */
-    table{width:100%;border-collapse:collapse;margin-top:12px}
-    th,td{padding:10px;border-bottom:1px dashed rgba(255,255,255,0.03);text-align:left}
-    th{font-size:13px;color:var(--muted)}
+  /* ===== MAIN CONTENT ===== */
+  .main { margin-left: 240px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+  .topbar {
+    background: white; border-bottom: 1px solid var(--border);
+    padding: 14px 28px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .topbar-title { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+  .topbar-subtitle { font-size: 0.8rem; color: var(--text-muted); margin-top: 1px; }
+  .content { padding: 28px; flex: 1; }
 
-    /* Responsive */
-    @media(max-width:880px){.grid{grid-template-columns:1fr}.logo{width:38px;height:38px}}
+  /* ===== CARDS ===== */
+  .card {
+    background: white; border-radius: var(--radius); box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+  }
+  .card-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap;
+  }
+  .card-title { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+  .card-body { padding: 20px; }
 
-    /* Login modal */
-    .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(2,6,23,0.6),rgba(2,6,23,0.85))}
-    .hidden{display:none}
+  /* ===== STAT CARDS ===== */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    background: white; border-radius: var(--radius); padding: 20px;
+    border: 2px solid var(--border); cursor: pointer; transition: all 0.2s;
+    box-shadow: var(--shadow);
+  }
+  .stat-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26,86,219,0.12); }
+  .stat-card.active { border-color: var(--primary); background: var(--primary-light); }
+  .stat-card .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; margin-bottom: 8px; }
+  .stat-card .stat-value { font-size: 2rem; font-weight: 800; color: var(--primary); line-height: 1; }
+  .stat-card .stat-desc { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; }
+  .stat-card .stat-icon { font-size: 1.8rem; margin-bottom: 10px; }
 
-    /* Tiny helpers */
-    .right{text-align:right}
-    .center{text-align:center}
-    .mt12{margin-top:12px}
-    .flex{display:flex}
-    .gap8{gap:8px}
-    .chip{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.03);font-size:12px}
+  /* ===== TABLE ===== */
+  .table-wrap { overflow-x: auto; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  thead th {
+    background: #f8fafc; color: var(--text-muted); font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; }
+  tbody tr:hover { background: #f8fafc; }
+  tbody tr:last-child td { border-bottom: none; }
 
-    footer{margin-top:14px;color:var(--muted);font-size:13px}
-  </style>
+  /* ===== BADGES ===== */
+  .badge {
+    display: inline-flex; align-items: center; padding: 3px 10px;
+    border-radius: 999px; font-size: 0.75rem; font-weight: 600;
+  }
+  .badge-success { background: var(--success-light); color: var(--success); }
+  .badge-danger { background: var(--danger-light); color: var(--danger); }
+  .badge-warning { background: var(--warning-light); color: var(--warning); }
+  .badge-primary { background: var(--primary-light); color: var(--primary); }
+  .badge-gray { background: #f3f4f6; color: #6b7280; }
+
+  /* ===== FORM GRID ===== */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .col-span-2 { grid-column: span 2; }
+
+  /* ===== DIVIDER ===== */
+  .section-divider {
+    display: flex; align-items: center; gap: 12px; margin: 24px 0;
+    color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .section-divider::before, .section-divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ===== TOAST ===== */
+  #toastContainer {
+    position: fixed; top: 20px; right: 20px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+  }
+  .toast {
+    padding: 12px 18px; border-radius: 10px; font-size: 0.875rem; font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15); max-width: 360px;
+    display: flex; align-items: center; gap: 10px; pointer-events: all;
+    animation: slideIn 0.3s ease; color: white;
+  }
+  .toast-success { background: #065f3a; }
+  .toast-error { background: #9b1919; }
+  .toast-warning { background: #b45309; }
+  @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100px); opacity: 0; } }
+
+  /* ===== MODAL ===== */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal {
+    background: white; border-radius: 14px; width: 100%; max-width: 440px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2); animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .modal-header {
+    padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-title { font-weight: 700; font-size: 1rem; }
+  .modal-close { cursor: pointer; color: var(--text-muted); font-size: 1.2rem; padding: 4px; border-radius: 4px; }
+  .modal-close:hover { background: var(--bg); }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* ===== MENU SECTION ===== */
+  .menu-section { display: none; }
+  .menu-section.active { display: block; }
+
+  /* ===== SUBMENU TABS ===== */
+  .submenu-tabs { display: flex; gap: 4px; margin-bottom: 20px; background: white; padding: 6px; border-radius: 10px; border: 1px solid var(--border); width: fit-content; }
+  .submenu-tab {
+    padding: 8px 18px; border-radius: 7px; font-size: 0.875rem; font-weight: 600;
+    cursor: pointer; color: var(--text-muted); transition: all 0.15s;
+  }
+  .submenu-tab.active { background: var(--primary); color: white; }
+  .submenu-tab:hover:not(.active) { background: var(--bg); }
+
+  /* ===== PERIOD CONTROL ===== */
+  .period-status-card {
+    border: 2px solid var(--border); border-radius: 10px; padding: 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    transition: all 0.2s;
+  }
+  .period-status-card.open { border-color: var(--success); background: var(--success-light); }
+  .period-status-card.closed { border-color: #6b7280; background: #f9fafb; }
+
+  /* ===== PRINT ===== */
+  @media print {
+    .sidebar, .topbar, .no-print { display: none !important; }
+    .main { margin-left: 0 !important; }
+    body { background: white; }
+  }
+
+  /* ===== CHECKBOX MATRIX ===== */
+  .matrix-table th, .matrix-table td { padding: 8px 12px; text-align: center; }
+  .matrix-table thead th:first-child { text-align: left; }
+  .matrix-table tbody td:first-child { text-align: left; }
+
+  /* ===== EMPTY STATE ===== */
+  .empty-state {
+    text-align: center; padding: 48px 24px; color: var(--text-muted);
+  }
+  .empty-state .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+  .empty-state h3 { font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .empty-state p { font-size: 0.875rem; }
+
+  .input-group-row { display: flex; gap: 10px; align-items: flex-end; }
+  .input-group-row .form-group { flex: 1; margin-bottom: 0; }
+</style>
 </head>
 <body>
-  <div class="modal" id="loginModal">
-    <div class="card" style="width:420px;">
-      <div class="brand" style="margin-bottom:12px">
-        <div class="logo">AR</div>
-        <div>
-          <h2 style="margin:0">Aplikasi Arisan</h2>
-          <div class="muted">Masuk untuk mengakses aplikasi</div>
-        </div>
-      </div>
-      <div>
-        <label>Username</label>
-        <input id="loginUsername" type="text" placeholder="masukkan username">
-        <label class="mt12">Password</label>
-        <input id="loginPassword" type="password" placeholder="masukkan password">
-        <div class="row mt12">
-          <button class="btn primary" id="btnLogin">Login</button>
-          <button class="btn" id="btnGuest">Masuk Sebagai Tamu</button>
-        </div>
-        <div class="muted mt12">Default administrator: admin / admin123</div>
-      </div>
+
+<!-- TOAST CONTAINER -->
+<div id="toastContainer"></div>
+
+<!-- LOGIN PAGE -->
+<div id="loginPage">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="icon">💰</div>
+      <h1>Aplikasi Arisan</h1>
+      <p>Sistem Manajemen Arisan Terintegrasi</p>
     </div>
+    <div class="error-box" id="loginError">❌ Username atau Password salah. Silakan coba lagi.</div>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="loginUser" placeholder="Masukkan username" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="loginPass" placeholder="Masukkan password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="doLogin()">Masuk ke Sistem</button>
+    <p style="text-align:center;margin-top:16px;font-size:0.8rem;color:var(--text-muted);">
+      Demo: <b>Administrator</b> / admin123 &nbsp;|&nbsp; <b>Kasir</b> / user123
+    </p>
   </div>
+</div>
 
-  <div class="container">
-    <header>
-      <div class="brand">
-        <div class="logo">AR</div>
+<!-- APP PAGE -->
+<div id="appPage">
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="app-icon">💰</div>
         <div>
-          <h1>Aplikasi Arisan</h1>
-          <div class="muted">Sistem arisan sederhana — responsive & modern</div>
+          <div class="app-title">Arisan App</div>
+          <div class="app-subtitle">v2.0 Terintegrasi</div>
         </div>
       </div>
-      <div id="userInfo" class="muted">Belum login</div>
-    </header>
-
-    <div class="grid">
-      <nav class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <strong>Menu</strong>
-          <button class="btn" id="btnLogout">Logout</button>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">A</div>
+        <div class="user-info">
+          <div class="name" id="userDisplayName">Administrator</div>
+          <div class="role" id="userDisplayRole">Hak Akses Penuh</div>
         </div>
-        <div class="menu">
-          <button class="btn" id="menuInput">1. Input Data</button>
-          <button class="btn" id="menuPengeluaran">2. Pengeluaran</button>
-          <button class="btn" id="menuLaporan">3. Laporan</button>
-          <div style="height:1px;background:rgba(255,255,255,0.02);margin:8px 0"></div>
-          <button class="btn" id="menuAdmin">Administrator</button>
+      </div>
+      <nav class="nav-section">
+        <div class="nav-label">Menu Utama</div>
+        <div class="nav-item active" onclick="showMenu('dashboard')">
+          <span class="nav-icon">📊</span> Dashboard
+        </div>
+        <div class="nav-item" onclick="showMenu('anggota')">
+          <span class="nav-icon">👥</span> Data Anggota
+        </div>
+        <div class="nav-item" onclick="showMenu('inputArisan')">
+          <span class="nav-icon">📝</span> Input Data Arisan
+        </div>
+        <div class="nav-item" onclick="showMenu('prosesPeriode')">
+          <span class="nav-icon">🔒</span> Proses Periode
+        </div>
+        <div class="nav-item" onclick="showMenu('pengeluaran')">
+          <span class="nav-icon">💸</span> Pengeluaran
+        </div>
+        <div class="nav-item" onclick="showMenu('laporan')">
+          <span class="nav-icon">📋</span> Laporan
+        </div>
+        <div class="nav-label" style="margin-top:8px;">Akun</div>
+        <div class="nav-item" onclick="showMenu('pengaturan')">
+          <span class="nav-icon">⚙️</span> Pengaturan
         </div>
       </nav>
+      <div class="sidebar-footer">
+        <div class="logout-btn" onclick="doLogout()">
+          <span>🚪</span> Keluar dari Sistem
+        </div>
+      </div>
+    </aside>
 
-      <main id="mainPanel">
-        <!-- content loaded by JS -->
-      </main>
-    </div>
+    <!-- MAIN CONTENT -->
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title" id="pageTitle">Dashboard</div>
+          <div class="topbar-subtitle" id="pageSubtitle">Selamat datang di Sistem Arisan</div>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-muted);" id="currentDate"></div>
+      </div>
 
-    <footer class="center muted">© Aplikasi Arisan — dibuat responsive. Simpan data ke Google Sheets.</footer>
+      <div class="content">
+
+        <!-- ===== DASHBOARD ===== -->
+        <div id="menu-dashboard" class="menu-section active">
+          <div class="stats-grid">
+            <div class="stat-card" onclick="filterDashboard('all')">
+              <div class="stat-icon">👥</div>
+              <div class="stat-label">Total Anggota</div>
+              <div class="stat-value" id="statTotal">0</div>
+              <div class="stat-desc">Aktif & Non-Aktif</div>
+            </div>
+            <div class="stat-card" onclick="filterDashboard('sudah')">
+              <div class="stat-icon">🏆</div>
+              <div class="stat-label">Sudah Dapat</div>
+              <div class="stat-value" id="statSudah">0</div>
+              <div class="stat-desc">Pernah menang arisan</div>
+            </div>
+            <div class="stat-card" onclick="filterDashboard('belum')">
+              <div class="stat-icon">⏳</div>
+              <div class="stat-label">Belum Dapat</div>
+              <div class="stat-value" id="statBelum">0</div>
+              <div class="stat-desc">Masih mengantre</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title" id="dashboardTableTitle">Daftar Seluruh Anggota</span>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-wrap">
+                <table id="dashboardTable">
+                  <thead>
+                    <tr>
+                      <th>ID Anggota</th>
+                      <th>Nama Lengkap</th>
+                      <th>Tanggal Gabung</th>
+                      <th>Status</th>
+                      <th>Keterangan</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashboardTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== DATA ANGGOTA ===== -->
+        <div id="menu-anggota" class="menu-section">
+          <div class="submenu-tabs">
+            <div class="submenu-tab active" onclick="showSubMenu('anggota','registrasi',this)">➕ Registrasi Anggota</div>
+            <div class="submenu-tab" onclick="showSubMenu('anggota','hapus',this)">🗑️ Hapus Anggota</div>
+            <div class="submenu-tab" onclick="showSubMenu('anggota','daftar',this)">📋 Daftar Anggota</div>
+          </div>
+          <!-- Registrasi -->
+          <div id="sub-anggota-registrasi">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Registrasi Anggota Baru</span></div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label>ID Anggota *</label>
+                    <input type="text" id="regId" placeholder="Contoh: A001">
+                  </div>
+                  <div class="form-group">
+                    <label>Nama Lengkap *</label>
+                    <input type="text" id="regNama" placeholder="Nama lengkap anggota">
+                  </div>
+                  <div class="form-group">
+                    <label>Tanggal Gabung *</label>
+                    <input type="date" id="regTanggal">
+                  </div>
+                  <div class="form-group">
+                    <label>Status</label>
+                    <select id="regStatus">
+                      <option value="Aktif">Aktif</option>
+                      <option value="Non-Aktif">Non-Aktif</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="margin-top:16px;">
+                  <button class="btn btn-success" onclick="simpanAnggota()">💾 Simpan Anggota</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Hapus -->
+          <div id="sub-anggota-hapus" style="display:none;">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Hapus Anggota</span></div>
+              <div class="card-body">
+                <div class="form-group" style="max-width:400px;">
+                  <label>Pilih Anggota yang Ingin Dihapus</label>
+                  <select id="selectHapusAnggota">
+                    <option value="">-- Pilih Anggota --</option>
+                  </select>
+                </div>
+                <button class="btn btn-danger" onclick="konfirmasiHapusAnggota()" style="margin-top:8px;">🗑️ Hapus Anggota</button>
+              </div>
+            </div>
+          </div>
+          <!-- Daftar -->
+          <div id="sub-anggota-daftar" style="display:none;">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Daftar Seluruh Anggota</span></div>
+              <div class="card-body" style="padding:0;">
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>ID</th><th>Nama</th><th>Tgl Gabung</th><th>Status</th></tr></thead>
+                    <tbody id="daftarAnggotaBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== INPUT ARISAN ===== -->
+        <div id="menu-inputArisan" class="menu-section">
+          <div class="card" style="margin-bottom:20px;">
+            <div class="card-header">
+              <span class="card-title">📋 Bagian 1: Data Putaran (Header)</span>
+            </div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Angkatan Ke- *</label>
+                  <select id="inputAngkatan" onchange="onAngkatanChange()">
+                    <option value="">-- Pilih Angkatan --</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Nama Penerima Arisan *</label>
+                  <select id="inputPenerima">
+                    <option value="">-- Pilih Penerima --</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Tanggal Putaran</label>
+                  <input type="date" id="inputTanggalPutaran">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">💳 Bagian 2: Data Setoran Anggota</span>
+            </div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Nama Penyetor *</label>
+                  <select id="inputPenyetor">
+                    <option value="">-- Pilih Penyetor --</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Metode Pembayaran</label>
+                  <select id="inputMetode">
+                    <option value="Cash">Cash</option>
+                    <option value="Transfer">Transfer</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Jumlah Setor (Rp)</label>
+                  <input type="number" id="inputSetor" value="100000">
+                </div>
+                <div class="form-group">
+                  <label>Konsumsi (Rp)</label>
+                  <input type="number" id="inputKonsumsi" value="20000">
+                </div>
+                <div class="form-group">
+                  <label>Kas (Rp)</label>
+                  <input type="number" id="inputKas" value="5000">
+                </div>
+              </div>
+              <div style="margin-top:16px;">
+                <button class="btn btn-primary" onclick="catatSetoran()">✅ Catat Setoran & Lanjut</button>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:20px;">
+            <div class="card-header"><span class="card-title">Riwayat Setoran Angkatan Ini</span></div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>ID Transaksi</th><th>Penyetor</th><th>Setor</th><th>Konsumsi</th><th>Kas</th><th>Metode</th><th>Tgl Input</th></tr></thead>
+                  <tbody id="riwayatSetoranBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== PROSES PERIODE ===== -->
+        <div id="menu-prosesPeriode" class="menu-section">
+          <div class="card" style="margin-bottom:20px;">
+            <div class="card-header"><span class="card-title">🔒 Kontrol Status Periode Angkatan</span></div>
+            <div class="card-body">
+              <div style="max-width:360px;margin-bottom:20px;">
+                <div class="form-group">
+                  <label>Pilih Angkatan</label>
+                  <select id="periodeAngkatan" onchange="updatePeriodeStatus()">
+                    <option value="">-- Pilih Angkatan --</option>
+                    <option value="1">Angkatan 1</option>
+                    <option value="2">Angkatan 2</option>
+                    <option value="3">Angkatan 3</option>
+                    <option value="4">Angkatan 4</option>
+                    <option value="5">Angkatan 5</option>
+                  </select>
+                </div>
+              </div>
+              <div id="periodeStatusDisplay" style="display:none;margin-bottom:20px;">
+                <div class="period-status-card" id="periodeStatusCard">
+                  <div>
+                    <div style="font-weight:700;" id="periodeStatusLabel">Status: Buka</div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);">Periode dapat diinput dan diedit</div>
+                  </div>
+                  <span class="badge" id="periodeStatusBadge">Buka</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <button class="btn btn-danger" onclick="tutupPeriode()">🔒 Tutup Periode</button>
+                <button class="btn btn-success" onclick="bukaPeriode()">🔓 Buka Periode</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Ringkasan Status Semua Angkatan</span></div>
+            <div class="card-body" style="padding:0;">
+              <table>
+                <thead><tr><th>Angkatan</th><th>Penerima</th><th>Jumlah Transaksi</th><th>Status Periode</th></tr></thead>
+                <tbody id="periodeRingkasanBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== PENGELUARAN ===== -->
+        <div id="menu-pengeluaran" class="menu-section">
+          <div class="submenu-tabs">
+            <div class="submenu-tab active" onclick="showSubMenu('pengeluaran','input',this)">➕ Input Pengeluaran</div>
+            <div class="submenu-tab" onclick="showSubMenu('pengeluaran','histori',this)">📋 Histori Pengeluaran</div>
+          </div>
+          <div id="sub-pengeluaran-input">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Catat Pengeluaran Baru</span></div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group col-span-2">
+                    <label>Deskripsi Pengeluaran *</label>
+                    <input type="text" id="keluarDeskripsi" placeholder="Contoh: Biaya konsumsi rapat">
+                  </div>
+                  <div class="form-group">
+                    <label>Kategori</label>
+                    <select id="keluarKategori">
+                      <option>Operasional</option>
+                      <option>Konsumsi</option>
+                      <option>Administrasi</option>
+                      <option>Lain-lain</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Tanggal *</label>
+                    <input type="date" id="keluarTanggal">
+                  </div>
+                  <div class="form-group">
+                    <label>Jumlah (Rp) *</label>
+                    <input type="number" id="keluarJumlah" placeholder="0">
+                  </div>
+                </div>
+                <div style="margin-top:16px;">
+                  <button class="btn btn-success" onclick="simpanPengeluaran()">💾 Simpan Pengeluaran</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="sub-pengeluaran-histori" style="display:none;">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Histori Pengeluaran</span></div>
+              <div class="card-body" style="padding:0;">
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>ID</th><th>Deskripsi</th><th>Kategori</th><th>Tanggal</th><th>Jumlah</th><th>Operator</th><th class="no-print">Aksi</th></tr></thead>
+                    <tbody id="historiPengeluaranBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== LAPORAN ===== -->
+        <div id="menu-laporan" class="menu-section">
+          <div class="submenu-tabs">
+            <div class="submenu-tab active" onclick="showSubMenu('laporan','rekap',this)">📊 Rekap Setoran Arisan</div>
+            <div class="submenu-tab" onclick="showSubMenu('laporan','pengeluaran',this)">💸 Histori Pengeluaran</div>
+          </div>
+          <div id="sub-laporan-rekap">
+            <div class="card" style="margin-bottom:20px;">
+              <div class="card-body">
+                <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
+                  <div class="form-group" style="margin:0;min-width:200px;">
+                    <label>Pilih Angkatan</label>
+                    <select id="laporanAngkatan" onchange="tampilkanLaporan()">
+                      <option value="">-- Pilih Angkatan --</option>
+                      <option value="1">Angkatan 1</option>
+                      <option value="2">Angkatan 2</option>
+                      <option value="3">Angkatan 3</option>
+                      <option value="4">Angkatan 4</option>
+                      <option value="5">Angkatan 5</option>
+                    </select>
+                  </div>
+                  <button class="btn btn-primary no-print" onclick="cetakPDF('laporanRekapContent')">🖨️ Cetak / Ekspor PDF</button>
+                </div>
+              </div>
+            </div>
+            <div id="laporanRekapContent">
+              <div class="card">
+                <div class="card-header">
+                  <span class="card-title" id="laporanRekapTitle">Rekap Setoran Arisan</span>
+                </div>
+                <div id="laporanPenerimaInfo" style="padding:12px 20px;background:var(--primary-light);border-bottom:1px solid var(--border);display:none;">
+                  <strong>Penerima Arisan:</strong> <span id="laporanPenerimaName">-</span>
+                  &nbsp;|&nbsp; <strong>Tanggal:</strong> <span id="laporanTanggal">-</span>
+                </div>
+                <div class="card-body" style="padding:0;">
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>No</th>
+                          <th>Nama Penyetor</th>
+                          <th>Nilai Setor</th>
+                          <th>Konsumsi</th>
+                          <th>Kas</th>
+                          <th>Nilai Diterima</th>
+                          <th>Metode</th>
+                          <th>Tgl Input</th>
+                        </tr>
+                      </thead>
+                      <tbody id="laporanRekapBody"></tbody>
+                      <tfoot id="laporanRekapFoot" style="background:#f8fafc;font-weight:700;"></tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="sub-laporan-pengeluaran" style="display:none;">
+            <div class="card" style="margin-bottom:20px;">
+              <div class="card-body" style="display:flex;gap:10px;">
+                <button class="btn btn-primary no-print" onclick="cetakPDF('laporanPengeluaranContent')">🖨️ Cetak / Ekspor PDF</button>
+              </div>
+            </div>
+            <div id="laporanPengeluaranContent">
+              <div class="card">
+                <div class="card-header"><span class="card-title">Laporan Histori Pengeluaran Lengkap</span></div>
+                <div class="card-body" style="padding:0;">
+                  <table>
+                    <thead><tr><th>ID</th><th>Deskripsi</th><th>Kategori</th><th>Tanggal</th><th>Jumlah</th><th>Log User</th></tr></thead>
+                    <tbody id="laporanPengeluaranBody"></tbody>
+                    <tfoot id="laporanPengeluaranFoot" style="background:#f8fafc;font-weight:700;"></tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== PENGATURAN ===== -->
+        <div id="menu-pengaturan" class="menu-section">
+          <div class="submenu-tabs">
+            <div class="submenu-tab active" onclick="showSubMenu('pengaturan','password',this)">🔑 Ubah Password</div>
+            <div class="submenu-tab" id="tabManajemenUser" onclick="showSubMenu('pengaturan','manajemen',this)">👤 Manajemen User</div>
+          </div>
+          <div id="sub-pengaturan-password">
+            <div class="card" style="max-width:500px;">
+              <div class="card-header"><span class="card-title">Ubah Password Akun Anda</span></div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label>Password Lama</label>
+                  <input type="password" id="passLama" placeholder="Password saat ini">
+                </div>
+                <div class="form-group">
+                  <label>Password Baru</label>
+                  <input type="password" id="passBaru" placeholder="Password baru">
+                </div>
+                <div class="form-group">
+                  <label>Konfirmasi Password Baru</label>
+                  <input type="password" id="passKonfirmasi" placeholder="Ulangi password baru">
+                </div>
+                <button class="btn btn-primary" onclick="ubahPassword()">🔑 Ubah Password</button>
+              </div>
+            </div>
+          </div>
+          <div id="sub-pengaturan-manajemen" style="display:none;">
+            <div class="card" style="margin-bottom:20px;">
+              <div class="card-header"><span class="card-title">Daftarkan User Baru</span></div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label>Username Baru</label>
+                    <input type="text" id="newUsername" placeholder="Username">
+                  </div>
+                  <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="newPassword" placeholder="Password">
+                  </div>
+                </div>
+                <div style="margin:16px 0 8px;font-weight:600;font-size:0.875rem;">Matriks Hak Akses</div>
+                <table class="matrix-table" style="width:auto;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                  <thead>
+                    <tr style="background:#f8fafc;">
+                      <th style="text-align:left;padding:10px 16px;">Menu</th>
+                      <th>View</th><th>Insert</th><th>Update</th><th>Delete</th>
+                    </tr>
+                  </thead>
+                  <tbody id="aksesMatrixBody"></tbody>
+                </table>
+                <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
+                  <div class="form-group" style="margin:0;min-width:200px;">
+                    <label style="margin-bottom:4px;">Salin Akses dari User</label>
+                    <select id="salinAksesFrom">
+                      <option value="">-- Pilih User --</option>
+                    </select>
+                  </div>
+                  <button class="btn btn-outline" style="margin-top:20px;" onclick="salinAkses()">📋 Salin</button>
+                </div>
+                <div style="margin-top:16px;">
+                  <button class="btn btn-success" onclick="simpanUserBaru()">💾 Daftarkan User</button>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><span class="card-title">Daftar User Terdaftar</span></div>
+              <div class="card-body" style="padding:0;">
+                <table>
+                  <thead><tr><th>Username</th><th>View</th><th>Insert</th><th>Update</th><th>Delete</th></tr></thead>
+                  <tbody id="daftarUserBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /content -->
+    </main>
   </div>
+</div>
 
-  <script>
-  /***** CONFIG - GANTI DENGAN DEPLOYED WEBAPP URL Google Apps Script *****/
-  const scriptURL = "https://script.google.com/macros/s/AKfycbwyTS2UYCNuIRVp10XWeeoGnSisLjLGaytgF-FC_n2e5wn2g7HbCCN6PE3cvPoGa7NI/exec"; // example: https://script.google.com/macros/s/AKfycbx.../exec
+<!-- MODAL KONFIRMASI HAPUS -->
+<div id="modalHapusAnggota" style="display:none;" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">⚠️ Konfirmasi Hapus</span>
+      <span class="modal-close" onclick="closeModal('modalHapusAnggota')">✕</span>
+    </div>
+    <div class="modal-body">
+      <p>Apakah Anda yakin ingin menghapus anggota <strong id="modalNamaHapus"></strong>?</p>
+      <p style="color:var(--text-muted);font-size:0.85rem;margin-top:8px;">Tindakan ini tidak dapat dibatalkan.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modalHapusAnggota')">No</button>
+      <button class="btn btn-danger" onclick="eksekusiHapusAnggota()">Yes, Hapus</button>
+    </div>
+  </div>
+</div>
 
-  /***** STATE *****/
-  let state = {user:null, users:[], master:[], dataInput:[], pengeluaran:[]};
+<script>
+// ==================== GAS CONFIG ====================
+// Ganti URL ini dengan URL Google Apps Script Anda yang sudah di-deploy sebagai Web App
+const GAS_URL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE';
 
-  /***** UTILITIES *****/
-  function $id(id){return document.getElementById(id)}
-  function fmtMoney(n){
-    if(n==null||n==='') return '';
-    const x = Number(String(n).replace(/\D/g,''))||0;
-    return x.toLocaleString('id-ID');
-  }
-  function parseMoney(s){return Number(String(s).replace(/\D/g,''))||0}
+// ==================== LOCAL DB (in-memory + localStorage sync) ====================
+let db = {
+  anggota: [],
+  penerimaArisan: [],
+  setoranArisan: [],
+  pengeluaran: [],
+  users: [
+    { username: 'Administrator', password: 'admin123', aksesView: true, aksesInsert: true, aksesUpdate: true, aksesDelete: true },
+    { username: 'Kasir', password: 'user123', aksesView: true, aksesInsert: true, aksesUpdate: false, aksesDelete: false }
+  ],
+  periodestatus: {}
+};
 
-  function showNotification(text,ok=true){
-    const el = document.createElement('div');
-    el.textContent = text; el.style.position='fixed'; el.style.right='18px'; el.style.bottom='18px'; el.style.padding='10px 14px'; el.style.borderRadius='8px';
-    el.style.background = ok? 'linear-gradient(90deg,var(--accent),var(--accent-2))' : 'rgba(220,60,60,0.9)'; el.style.color='white'; el.style.boxShadow='0 6px 20px rgba(2,6,23,0.6)';
-    document.body.appendChild(el); setTimeout(()=>el.remove(),2300);
-  }
+let currentUser = null;
 
-  async function api(action,payload={}){
-    try{
-      const body = Object.assign({}, payload, {action});
-      const res = await fetch(scriptURL, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body) });
-      if(!res.ok) throw new Error('HTTP '+res.status);
-      return await res.json();
-    }catch(err){
-      console.error(err); showNotification('Koneksi gagal: '+err.message,false); throw err;}
-  }
-
-  /***** BOOT & SYNC *****/
-  async function loadAll(){
-    // load users, master list, data input, pengeluaran
-    try{
-      const [users, master, dataInput, pengeluaran] = await Promise.all([
-        api('readUsers'), api('readMaster'), api('readInputs'), api('readPengeluaran')
-      ]);
-      state.users = users||[]; state.master = master||[]; state.dataInput = dataInput||[]; state.pengeluaran = pengeluaran||[];
-      console.log('sync',state);
-    }catch(e){console.warn('sync error',e)}
-  }
-
-  /***** AUTH *****/
-  async function doLogin(username,password){
-    // simple local check against loaded users
-    await loadAll();
-    const u = state.users.find(x=>x.username===username && x.password===password);
-    if(!u) return false;
-    state.user = u; sessionStorage.setItem('arisan_user', JSON.stringify(u)); document.getElementById('loginModal').classList.add('hidden');
-    $id('userInfo').textContent = `Hi, ${u.fullname || u.username}`;
-    renderMain();
-    return true;
-  }
-
-  function checkSession(){
-    const s = sessionStorage.getItem('arisan_user');
-    if(s){state.user = JSON.parse(s); document.getElementById('loginModal').classList.add('hidden'); $id('userInfo').textContent = `Hi, ${state.user.fullname || state.user.username}`;}
-  }
-
-  async function logout(){sessionStorage.removeItem('arisan_user'); state.user=null; document.getElementById('loginModal').classList.remove('hidden'); $id('userInfo').textContent='Belum login';}
-
-  /***** ADMIN UI (manage users) *****/
-  function renderAdmin(){
-    const can = state.user && (state.user.role === 'admin');
-    const h = [];
-    h.push(`<div class="card"><h3>Admin — Pengaturan User</h3>`);
-    if(!can) h.push(`<div class="muted">Hanya admin yang bisa melihat pengaturan user.</div>`);
-    h.push(`<div style="margin-top:12px">`);
-    h.push(`<div style="display:flex;gap:8px"><input id="u_username" placeholder="username"> <input id="u_fullname" placeholder="nama lengkap"> <input id="u_password" placeholder="password"> <button class="btn primary" id="btnAddUser">Tambah</button></div>`);
-    h.push(`<div style="margin-top:12px"><table><thead><tr><th>User</th><th>Nama</th><th>Role</th><th>Permission</th><th></th></tr></thead><tbody id="usersTable"></tbody></table></div>`);
-    h.push(`</div></div>`);
-    $id('mainPanel').innerHTML = h.join('');
-    // populate
-    const tbody = $id('usersTable'); tbody.innerHTML='';
-    state.users.forEach(u=>{
-      const perms = ['open','insert','update','delete'].map(p=>`<label style="margin-right:6px"><input type=checkbox ${u.perms && u.perms.includes(p)?'checked':''} data-user="${u.username}" data-perm="${p}"> ${p}</label>`).join('');
-      const row = document.createElement('tr'); row.innerHTML = `<td>${u.username}</td><td>${u.fullname||''}</td><td>${u.role||'user'}</td><td>${perms}</td><td><button class="btn" data-usr="${u.username}" onclick="onDeleteUser('${u.username}')">Hapus</button></td>`;
-      tbody.appendChild(row);
-    });
-    $id('btnAddUser').addEventListener('click',async()=>{
-      const username = $id('u_username').value.trim(); const fullname = $id('u_fullname').value.trim(); const password = $id('u_password').value.trim();
-      if(!username||!password){showNotification('Username dan password wajib',false);return}
-      await api('addUser',{username,fullname,password,role:'user',perms:['open','insert']});
-      await loadAll(); renderAdmin(); showNotification('User ditambahkan');
-    });
-    // attach perm checkboxes
-    tbody.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.addEventListener('change',async(e)=>{
-      const username = e.target.dataset.user; const perm = e.target.dataset.perm; const checked = e.target.checked;
-      await api('setUserPerm',{username,perm,checked}); await loadAll(); showNotification('Permission diperbarui');
-    }));
-  }
-
-  async function onDeleteUser(username){ if(!confirm('Hapus user '+username+' ?')) return; await api('deleteUser',{username}); await loadAll(); renderAdmin(); showNotification('User dihapus'); }
-
-  /***** INPUT DATA UI *****/
-  function renderInput(){
-    const selectedReceiver = localStorage.getItem('arisan_selected_receiver') || '';
-    const curMonth = new Date().getMonth()+1; const curYear = new Date().getFullYear();
-    const h=[];
-    h.push(`<div class="card"><h3>Input Data</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">`);
-    // Left
-    h.push(`<div><label>Penerima</label><select id="inp_penerima"><option value="">-- pilih penerima --</option>${state.master.map(m=>`<option ${m.name===selectedReceiver?'selected':''} value="${m.name}">${m.name}</option>`).join('')}</select><div class="mt12"><label>Bulan</label><select id="inp_bulan">${[...Array(12)].map((_,i)=>`<option value="${i+1}" ${i+1===curMonth?'selected':''}>${i+1}</option>`).join('')}</select></div><div class="mt12"><label>Tahun</label><select id="inp_tahun">${[...Array(6)].map((_,i)=>`<option value="${curYear-i}" ${i===0?'selected':''}>${curYear-i}</option>`).join('')}</select></div></div>`);
-    // Center
-    h.push(`<div><label>Penyetor</label><select id="inp_penyetor"><option value="">-- pilih penyetor --</option>${state.master.map(m=>`<option value="${m.name}">${m.name}</option>`).join('')}</select>
-    <div class="mt12"><label>Jumlah Disetor</label><input id="inp_jumlah" type="text" placeholder="0"></div>
-    <div class="mt12 row"><div class="col"><label>Kas Untuk Penerima</label><input id="inp_penerima_kas" type="text" placeholder="0"></div><div class="col"><label>Kas Untuk Panitia</label><input id="inp_panitia_kas" type="text" placeholder="0"></div></div>
-    <div class="mt12"><label>Metode Pembayaran</label><label><input type=checkbox id="pay_cash"> Cash</label> <label><input type=checkbox id="pay_transfer"> Transfer</label></div>
-    <div class="mt12 row"><button class="btn primary" id="btnSaveInput">Simpan</button><button class="btn" id="btnBackMain">Kembali</button></div>
-    </div>`);
-    h.push(`</div></div>`);
-    $id('mainPanel').innerHTML = h.join('');
-    // format events
-    document.getElementById('inp_jumlah').addEventListener('blur',e=>e.target.value = fmtMoney(e.target.value));
-    document.getElementById('inp_penerima_kas').addEventListener('blur',e=>e.target.value = fmtMoney(e.target.value));
-    document.getElementById('inp_panitia_kas').addEventListener('blur',e=>e.target.value = fmtMoney(e.target.value));
-    $id('btnSaveInput').addEventListener('click', async ()=>{
-      const penerima = $id('inp_penerima').value; if(!penerima){showNotification('Pilih penerima',false);return}
-      const penyetor = $id('inp_penyetor').value; if(!penyetor){showNotification('Pilih penyetor',false);return}
-      const bulan = $id('inp_bulan').value; const tahun = $id('inp_tahun').value;
-      const jumlah = parseMoney($id('inp_jumlah').value); const kas_penerima = parseMoney($id('inp_penerima_kas').value); const kas_panitia = parseMoney($id('inp_panitia_kas').value);
-      const metode = [];
-      if($id('pay_cash').checked) metode.push('Cash'); if($id('pay_transfer').checked) metode.push('Transfer');
-      const record = {penerima,penyetor,bulan,tahun,jumlah,kas_penerima,kas_panitia,metode,created: new Date().toISOString()};
-      // push to UI first
-      state.dataInput.unshift(record); renderToastSave();
-      // store on server
-      await api('addInput', record);
-      localStorage.setItem('arisan_selected_receiver', penerima);
-      await loadAll(); renderInput(); showNotification('Data berhasil disimpan');
-    });
-    $id('btnBackMain').addEventListener('click',()=>renderMain());
-  }
-
-  function renderToastSave(){
-    // optional immediate UI feedback (could show small table preview)
-  }
-
-  /***** PENGELUARAN UI *****/
-  function renderPengeluaran(){
-    const h=[]; h.push(`<div class="card"><h3>Pengeluaran</h3><div style="margin-top:12px"><label>Tanggal</label><input id="exp_tgl" type="date" value="${new Date().toISOString().slice(0,10)}"><label class="mt12">Keterangan</label><input id="exp_ket" type="text"><label class="mt12">Nominal</label><input id="exp_nom" type="text"></div><div class="mt12 row"><button class="btn primary" id="btnSaveExp">Simpan</button><button class="btn" id="btnBackMain2">Kembali</button></div></div>`);
-    $id('mainPanel').innerHTML = h.join('');
-    $id('exp_nom').addEventListener('blur',e=>e.target.value = fmtMoney(e.target.value));
-    $id('btnSaveExp').addEventListener('click',async()=>{
-      const tanggal = $id('exp_tgl').value; const ket = $id('exp_ket').value; const nom = parseMoney($id('exp_nom').value);
-      if(!tanggal||!ket||!nom){showNotification('Lengkapi data',false);return}
-      const rec = {tanggal,ket,nominal:nom,created:new Date().toISOString()};
-      state.pengeluaran.unshift(rec);
-      await api('addPengeluaran',rec);
-      await loadAll(); renderPengeluaran(); showNotification('Data pengeluaran tersimpan');
-    });
-    $id('btnBackMain2').addEventListener('click',()=>renderMain());
-  }
-
-  /***** LAPORAN UI *****/
-  function renderLaporanMenu(){
-    const h=[]; h.push(`<div class="card"><h3>Laporan</h3><div class="row mt12 gap8"><button class="btn" id="lapArisan">Laporan Arisan</button><button class="btn" id="lapPanitia">Laporan Kas Panitia</button><button class="btn" id="lapPengeluaran">Laporan Pengeluaran</button></div><div class="mt12"><button class="btn" id="btnBackMain3">Kembali</button></div></div>`);
-    $id('mainPanel').innerHTML = h.join('');
-    $id('lapArisan').addEventListener('click',()=>renderLaporanArisan());
-    $id('lapPanitia').addEventListener('click',()=>renderLaporanPanitia());
-    $id('lapPengeluaran').addEventListener('click',()=>renderLaporanPengeluaran());
-    $id('btnBackMain3').addEventListener('click',()=>renderMain());
-  }
-
-  function renderLaporanArisan(){
-    const penerima = localStorage.getItem('arisan_selected_receiver')||'';
-    const h=[]; h.push(`<div class="card"><h3>Laporan Arisan</h3><div style="display:flex;gap:12px;align-items:end"><div style="flex:1"><label>Penerima</label><select id="lap_penerima"><option value="">-- pilih --</option>${state.master.map(m=>`<option value="${m.name}" ${m.name===penerima?'selected':''}>${m.name}</option>`).join('')}</select></div><div><label>Bulan</label><select id="lap_bulan"></select></div><div><label>Tahun</label><select id="lap_tahun"></select></div></div><div id="lap_table"></div><div class="mt12 row"><button class="btn" id="btnPrintArisan">Print / PDF</button> <button class="btn" id="btnBackL1">Kembali</button></div></div>`);
-    $id('mainPanel').innerHTML = h.join('');
-    const select = $id('lap_penerima'); select.addEventListener('change',()=>renderArisanTable());
-    function populateMonthsYears(){
-      const pener = select.value||penerima; const rows = state.dataInput.filter(r=>r.penerima===pener);
-      const months = [...new Set(rows.map(r=>String(r.bulan)))].sort(); const years = [...new Set(rows.map(r=>String(r.tahun)))].sort();
-      $id('lap_bulan').innerHTML = months.map(m=>`<option value="${m}">${m}</option>`).join('');
-      $id('lap_tahun').innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join('');
+// Load from localStorage
+function loadDB() {
+  try {
+    const saved = localStorage.getItem('arisanDB');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      db.anggota = parsed.anggota || [];
+      db.penerimaArisan = parsed.penerimaArisan || [];
+      db.setoranArisan = parsed.setoranArisan || [];
+      db.pengeluaran = parsed.pengeluaran || [];
+      db.users = parsed.users || db.users;
+      db.periodestatus = parsed.periodestatus || {};
     }
-    populateMonthsYears(); renderArisanTable();
-    async function renderArisanTable(){
-      const pener = $id('lap_penerima').value || penerima; const bulan = $id('lap_bulan').value; const tahun = $id('lap_tahun').value;
-      const rows = state.dataInput.filter(r=>r.penerima===pener && (!bulan || String(r.bulan)===String(bulan)) && (!tahun || String(r.tahun)===String(tahun)));
-      const total_disetor = rows.reduce((s,r)=>s+Number(r.jumlah||0),0);
-      const total_penerima = rows.reduce((s,r)=>s+Number(r.kas_penerima||0),0);
-      const html = [`<table><thead><tr><th>Penyetor</th><th>Jumlah Disetor</th><th>Kas Untuk Penerima</th><th>Tanggal Input</th></tr></thead><tbody>`];
-      rows.forEach(r=>html.push(`<tr><td>${r.penyetor}</td><td>${fmtMoney(r.jumlah)}</td><td>${fmtMoney(r.kas_penerima)}</td><td>${(new Date(r.created)).toLocaleString()}</td></tr>`));
-      html.push(`</tbody></table>`);
-      html.push(`<div class="mt12 right"><div>Total Disetor: <strong>${fmtMoney(total_disetor)}</strong></div><div>Total Kas Penerima: <strong>${fmtMoney(total_penerima)}</strong></div><div>Total Keseluruhan: <strong>${fmtMoney(total_disetor+total_penerima)}</strong></div></div>`);
-      $id('lap_table').innerHTML = html.join('');
-    }
-    $id('btnPrintArisan').addEventListener('click',()=>window.print());
-    $id('btnBackL1').addEventListener('click',()=>renderLaporanMenu());
-  }
+  } catch(e) {}
+}
 
-  function renderLaporanPanitia(){
-    const rows = state.dataInput;
-    const grouped = {};
-    rows.forEach(r=>{
-      const key = r.penerima+'|'+r.bulan+'|'+r.tahun;
-      if(!grouped[key]) grouped[key]={penerima:r.penerima,bulan:r.bulan,tahun:r.tahun,penyetor:[],total:0};
-      grouped[key].penyetor.push(r.penyetor);
-      grouped[key].total += Number(r.kas_panitia||0);
+function saveDB() {
+  localStorage.setItem('arisanDB', JSON.stringify(db));
+  // Sync ke GAS (Google Sheets) secara async
+  syncToGAS();
+}
+
+// ==================== GAS SYNC ====================
+async function syncToGAS(action, data) {
+  if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      mode: 'no-cors',
+      body: JSON.stringify({ action: action || 'syncAll', data: data || db })
     });
-    const list = Object.values(grouped);
-    const html = [`<div class="card"><h3>Laporan Kas Untuk Panitia</h3><table><thead><tr><th>Penerima</th><th>Bulan</th><th>Penyetor</th><th>Kas Untuk Panitia</th></tr></thead><tbody>`];
-    list.forEach((g,i)=>html.push(`<tr><td>${g.penerima}</td><td>${g.bulan}/${g.tahun}</td><td>${g.penyetor.join(', ')}</td><td>${fmtMoney(g.total)}</td></tr>`));
-    const total = list.reduce((s,g)=>s+g.total,0);
-    html.push(`</tbody></table><div class="mt12 right">Total Kas Untuk Panitia: <strong>${fmtMoney(total)}</strong></div><div class="mt12 row"><button class="btn" onclick="window.print()">Print / PDF</button><button class="btn" onclick="renderLaporanMenu()">Kembali</button></div></div>`);
-    $id('mainPanel').innerHTML = html.join('');
+  } catch(e) {
+    console.warn('GAS sync failed (offline mode):', e);
   }
+}
 
-  function renderLaporanPengeluaran(){
-    const rows = state.pengeluaran;
-    const html = [`<div class="card"><h3>Laporan Pengeluaran</h3><table><thead><tr><th>No</th><th>Tanggal</th><th>Keterangan</th><th>Nominal</th></tr></thead><tbody>`];
-    rows.forEach((r,i)=>html.push(`<tr><td>${i+1}</td><td>${r.tanggal}</td><td>${r.ket}</td><td>${fmtMoney(r.nominal)}</td></tr>`));
-    const total = rows.reduce((s,r)=>s+Number(r.nominal||0),0);
-    html.push(`</tbody></table><div class="mt12 right">Total Pengeluaran: <strong>${fmtMoney(total)}</strong></div><div class="mt12 row"><button class="btn" onclick="window.print()">Print / PDF</button><button class="btn" onclick="renderLaporanMenu()">Kembali</button></div></div>`);
-    $id('mainPanel').innerHTML = html.join('');
+async function loadFromGAS() {
+  if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  try {
+    const res = await fetch(GAS_URL + '?action=getAll');
+    const data = await res.json();
+    if (data && data.anggota) {
+      db.anggota = data.anggota;
+      db.penerimaArisan = data.penerimaArisan;
+      db.setoranArisan = data.setoranArisan;
+      db.pengeluaran = data.pengeluaran;
+      db.users = data.users || db.users;
+      db.periodestatus = data.periodestatus || {};
+      localStorage.setItem('arisanDB', JSON.stringify(db));
+    }
+  } catch(e) {
+    console.warn('Load dari GAS gagal, menggunakan data lokal');
   }
+}
 
-  /***** MAIN MENU *****/
-  function renderMain(){
-    const h=[]; h.push(`<div class="card"><h3>Beranda</h3><div style="display:flex;gap:12px;margin-top:12px"><div class="col"><div class="chip">Data Input: ${state.dataInput.length}</div></div><div class="col right"><button class="btn primary" onclick="renderInput()">Mulai Input Data</button></div></div></div>`);
-    $id('mainPanel').innerHTML = h.join('');
+// ==================== FORMAT HELPERS ====================
+function rupiah(n) {
+  return 'Rp ' + (parseInt(n)||0).toLocaleString('id-ID');
+}
+function today() {
+  return new Date().toISOString().split('T')[0];
+}
+function genId(prefix) {
+  return prefix + Date.now().toString().slice(-6);
+}
+
+// ==================== TOAST ====================
+function toast(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  const icons = { success: '✅', error: '❌', warning: '⚠️' };
+  el.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'slideOut 0.3s ease forwards';
+    setTimeout(() => el.remove(), 300);
+  }, 3500);
+}
+
+// ==================== MODAL ====================
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+// ==================== LOGIN ====================
+function doLogin() {
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const found = db.users.find(u => u.username === user && u.password === pass);
+  if (!found) {
+    document.getElementById('loginError').style.display = 'block';
+    return;
   }
+  document.getElementById('loginError').style.display = 'none';
+  currentUser = found;
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('appPage').style.display = 'block';
+  document.getElementById('userDisplayName').textContent = found.username;
+  document.getElementById('userDisplayRole').textContent = found.username === 'Administrator' ? 'Hak Akses Penuh' : 'Hak Akses Terbatas';
+  document.getElementById('userAvatar').textContent = found.username[0].toUpperCase();
+  document.getElementById('currentDate').textContent = new Date().toLocaleDateString('id-ID', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  // Setup defaults
+  document.getElementById('regTanggal').value = today();
+  document.getElementById('inputTanggalPutaran').value = today();
+  document.getElementById('keluarTanggal').value = today();
+  // Load from GAS first, then refresh UI
+  loadFromGAS().then(() => { refreshAll(); });
+  // Control admin-only tabs
+  if (currentUser.username !== 'Administrator') {
+    document.getElementById('tabManajemenUser').style.opacity = '0.4';
+  } else {
+    document.getElementById('tabManajemenUser').style.opacity = '1';
+  }
+}
 
-  /***** Event wiring for menu buttons (top-level) *****/
-  document.getElementById('menuInput').addEventListener('click',()=>renderInput());
-  document.getElementById('menuPengeluaran').addEventListener('click',()=>renderPengeluaran());
-  document.getElementById('menuLaporan').addEventListener('click',()=>renderLaporanMenu());
-  document.getElementById('menuAdmin').addEventListener('click',()=>renderAdmin());
-  document.getElementById('btnLogout').addEventListener('click',()=>logout());
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('loginPage').style.display !== 'none') doLogin();
+});
 
-  // login handlers
-  document.getElementById('btnLogin').addEventListener('click', async ()=>{
-    const u = $id('loginUsername').value.trim(); const p = $id('loginPassword').value.trim();
-    if(!u||!p){showNotification('Isi username & password',false);return}
-    const ok = await doLogin(u,p);
-    if(!ok) showNotification('Login gagal',false);
+function doLogout() {
+  currentUser = null;
+  document.getElementById('appPage').style.display = 'none';
+  document.getElementById('loginPage').style.display = 'flex';
+  showMenu('dashboard');
+}
+
+// ==================== MENU ====================
+function showMenu(menu) {
+  document.querySelectorAll('.menu-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('menu-' + menu).classList.add('active');
+  const navMap = { dashboard:'Dashboard', anggota:'Data Anggota', inputArisan:'Input Data Arisan', prosesPeriode:'Proses Periode', pengeluaran:'Pengeluaran', laporan:'Laporan', pengaturan:'Pengaturan' };
+  const subtitleMap = { dashboard:'Statistik dan ringkasan data', anggota:'Kelola keanggotaan arisan', inputArisan:'Catat transaksi setoran', prosesPeriode:'Kunci/buka periode angkatan', pengeluaran:'Catat operasional keuangan', laporan:'Rekap dan dokumentasi', pengaturan:'Konfigurasi akun & user' };
+  document.getElementById('pageTitle').textContent = navMap[menu] || menu;
+  document.getElementById('pageSubtitle').textContent = subtitleMap[menu] || '';
+  const items = document.querySelectorAll('.nav-item');
+  items.forEach(i => { if (i.getAttribute('onclick') && i.getAttribute('onclick').includes(menu)) i.classList.add('active'); });
+  if (menu === 'dashboard') refreshDashboard();
+  if (menu === 'anggota') { refreshHapusAnggotaSelect(); refreshDaftarAnggota(); }
+  if (menu === 'inputArisan') { refreshInputAngkatan(); refreshPenerimaDropdown(); refreshPenyetorDropdown(); refreshRiwayatSetoran(); }
+  if (menu === 'prosesPeriode') refreshPeriodeRingkasan();
+  if (menu === 'pengeluaran') refreshHistoriPengeluaran();
+  if (menu === 'laporan') { refreshLaporanPengeluaran(); }
+  if (menu === 'pengaturan') { refreshDaftarUser(); refreshSalinAksesSelect(); buildAksesMatrix(); }
+}
+
+function showSubMenu(parent, sub, el) {
+  document.querySelectorAll(`#menu-${parent} .submenu-content, #sub-${parent}-${sub}`).forEach(s => s && (s.style.display='none'));
+  // Hide all sub sections under parent
+  document.querySelectorAll(`[id^="sub-${parent}-"]`).forEach(s => s.style.display='none');
+  document.getElementById(`sub-${parent}-${sub}`).style.display = 'block';
+  document.querySelectorAll(`#menu-${parent} .submenu-tab`).forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  if (parent==='laporan' && sub==='pengeluaran') refreshLaporanPengeluaran();
+  if (parent==='anggota' && sub==='daftar') refreshDaftarAnggota();
+  if (parent==='pengeluaran' && sub==='histori') refreshHistoriPengeluaran();
+  if (parent==='pengaturan' && sub==='manajemen') {
+    if (currentUser.username !== 'Administrator') {
+      toast('Akses Ditolak! Hanya Administrator yang dapat mengelola user.', 'error');
+      return;
+    }
+    document.getElementById(`sub-${parent}-${sub}`).style.display = 'block';
+  }
+}
+
+function refreshAll() {
+  refreshDashboard();
+  refreshHapusAnggotaSelect();
+  refreshDaftarAnggota();
+  refreshInputAngkatan();
+  refreshPenerimaDropdown();
+  refreshPenyetorDropdown();
+  refreshRiwayatSetoran();
+  refreshPeriodeRingkasan();
+  refreshHistoriPengeluaran();
+  refreshDaftarUser();
+}
+
+// ==================== DASHBOARD ====================
+function refreshDashboard(filter) {
+  const winners = db.penerimaArisan.map(p => p.idPenerima);
+  const total = db.anggota.length;
+  const sudah = db.anggota.filter(a => winners.includes(a.id)).length;
+  const belum = db.anggota.filter(a => a.status === 'Aktif' && !winners.includes(a.id)).length;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statSudah').textContent = sudah;
+  document.getElementById('statBelum').textContent = belum;
+  // Remove active from all stat cards
+  document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+  let rows = [];
+  if (!filter || filter === 'all') {
+    rows = db.anggota;
+    document.getElementById('dashboardTableTitle').textContent = 'Daftar Seluruh Anggota';
+    document.querySelectorAll('.stat-card')[0].classList.add('active');
+  } else if (filter === 'sudah') {
+    rows = db.anggota.filter(a => winners.includes(a.id));
+    document.getElementById('dashboardTableTitle').textContent = 'Anggota yang Sudah Mendapat Arisan';
+    document.querySelectorAll('.stat-card')[1].classList.add('active');
+  } else if (filter === 'belum') {
+    rows = db.anggota.filter(a => a.status === 'Aktif' && !winners.includes(a.id));
+    document.getElementById('dashboardTableTitle').textContent = 'Anggota yang Belum Mendapat Arisan';
+    document.querySelectorAll('.stat-card')[2].classList.add('active');
+  }
+  const tbody = document.getElementById('dashboardTableBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📋</div><h3>Belum ada data</h3><p>Silakan tambahkan anggota terlebih dahulu.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(a => {
+    const menang = db.penerimaArisan.filter(p => p.idPenerima === a.id);
+    const ket = menang.length ? '🏆 Menang Angkatan ' + menang.map(m=>m.angkatan).join(', ') : '-';
+    return `<tr>
+      <td><span class="badge badge-gray">${a.id}</span></td>
+      <td><b>${a.nama}</b></td>
+      <td>${a.tanggalGabung}</td>
+      <td><span class="badge ${a.status==='Aktif'?'badge-success':'badge-danger'}">${a.status}</span></td>
+      <td>${ket}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterDashboard(f) { refreshDashboard(f); }
+
+// ==================== ANGGOTA ====================
+function simpanAnggota() {
+  const id = document.getElementById('regId').value.trim();
+  const nama = document.getElementById('regNama').value.trim();
+  const tgl = document.getElementById('regTanggal').value;
+  const status = document.getElementById('regStatus').value;
+  if (!id || !nama || !tgl) { toast('ID, Nama, dan Tanggal wajib diisi!', 'error'); return; }
+  if (db.anggota.find(a => a.id === id)) {
+    toast(`⚠️ ID Anggota "${id}" sudah terdaftar! Gunakan ID lain.`, 'warning'); return;
+  }
+  db.anggota.push({ id, nama, tanggalGabung: tgl, status });
+  saveDB();
+  toast(`Anggota ${nama} berhasil didaftarkan!`, 'success');
+  document.getElementById('regId').value = '';
+  document.getElementById('regNama').value = '';
+  document.getElementById('regTanggal').value = today();
+  refreshDashboard();
+}
+
+function refreshHapusAnggotaSelect() {
+  const sel = document.getElementById('selectHapusAnggota');
+  sel.innerHTML = '<option value="">-- Pilih Anggota --</option>';
+  db.anggota.forEach(a => {
+    sel.innerHTML += `<option value="${a.id}">${a.nama} (${a.id})</option>`;
   });
-  document.getElementById('btnGuest').addEventListener('click', async ()=>{ await loadAll(); document.getElementById('loginModal').classList.add('hidden'); renderMain(); });
-
-  // on load
-  (async function(){
-    checkSession(); await loadAll(); if(state.user) renderMain(); else document.getElementById('loginModal').classList.remove('hidden');
-  })();
-
-  // expose renderInput for inline onclick
-  window.renderInput = renderInput; window.renderLaporanMenu = renderLaporanMenu; window.renderLaporanPanitia = renderLaporanPanitia; window.renderLaporanPengeluaran = renderLaporanPengeluaran; window.renderAdmin = renderAdmin; window.renderMain = renderMain;
-  </script>
-
-
-<!--
-================================
-Google Apps Script (Code.gs)
-Copy the code below into a new Google Apps Script project. Update CONTENT_SPREADSHEET_ID.
-Set deployment: Web app (Execute as: Me, Who has access: Anyone)
-================================
--->
-
-<!--
------ START OF Code.gs -----
-
-// GANTI DENGAN SPREADSHEET ID ANDA
-const CONTENT_SPREADSHEET_ID = 'PASTE_YOUR_SPREADSHEET_ID_HERE';
-
-function getSS(){return SpreadsheetApp.openById(CONTENT_SPREADSHEET_ID);}
-
-function doPost(e){
-  try{
-    const body = typeof e.postData.contents === 'string' ? JSON.parse(e.postData.contents) : e.postData.contents;
-    const action = body.action;
-    switch(action){
-      case 'readUsers': return jsonOutput(readUsers());
-      case 'readMaster': return jsonOutput(readMaster());
-      case 'readInputs': return jsonOutput(readInputs());
-      case 'readPengeluaran': return jsonOutput(readPengeluaran());
-      case 'addUser': return jsonOutput(addUser(body));
-      case 'deleteUser': return jsonOutput(deleteUser(body.username));
-      case 'setUserPerm': return jsonOutput(setUserPerm(body));
-      case 'addInput': return jsonOutput(addInput(body));
-      case 'addPengeluaran': return jsonOutput(addPengeluaran(body));
-      default: return jsonOutput({error:'unknown action '+action});
-    }
-  }catch(err){return jsonOutput({error:err.message});}
 }
 
-function jsonOutput(obj){return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);}
-
-// USERS sheet structure (header row): username | fullname | password | role | perms (comma sep)
-function readUsers(){
-  const sh = getSS().getSheetByName('Users'); if(!sh) return [];
-  const rows = sh.getDataRange().getValues();
-  const header = rows.shift();
-  return rows.map(r=>({username:r[0],fullname:r[1],password:String(r[2]||''),role:r[3]||'user',perms:(String(r[4]||'')).split(',').filter(Boolean)}));
+let anggotaToDelete = null;
+function konfirmasiHapusAnggota() {
+  const sel = document.getElementById('selectHapusAnggota');
+  const id = sel.value;
+  if (!id) { toast('Pilih anggota yang ingin dihapus!', 'error'); return; }
+  const anggota = db.anggota.find(a => a.id === id);
+  anggotaToDelete = anggota;
+  document.getElementById('modalNamaHapus').textContent = anggota.nama;
+  document.getElementById('modalHapusAnggota').style.display = 'flex';
 }
 
-function addUser(data){
-  const sh = getSS().getSheetByName('Users'); if(!sh) sh = getSS().insertSheet('Users');
-  // if sheet empty, set header
-  if(sh.getLastRow()===0) sh.appendRow(['username','fullname','password','role','perms']);
-  sh.appendRow([data.username||'',data.fullname||'',data.password||'',data.role||'user', (data.perms||[]).join(',')]);
-  return {ok:true};
+function eksekusiHapusAnggota() {
+  if (!anggotaToDelete) return;
+  db.anggota = db.anggota.filter(a => a.id !== anggotaToDelete.id);
+  saveDB();
+  toast(`Anggota ${anggotaToDelete.nama} telah berhasil dihapus.`, 'success');
+  closeModal('modalHapusAnggota');
+  refreshHapusAnggotaSelect();
+  refreshDashboard();
+  anggotaToDelete = null;
 }
 
-function deleteUser(username){
-  const sh = getSS().getSheetByName('Users'); if(!sh) return {ok:false};
-  const rows = sh.getDataRange().getValues();
-  for(let i=1;i<rows.length;i++){if(rows[i][0]===username){sh.deleteRow(i+1);return {ok:true}}}
-  return {ok:false};
-}
-
-function setUserPerm(body){
-  const sh = getSS().getSheetByName('Users'); if(!sh) return {ok:false};
-  const rows = sh.getDataRange().getValues();
-  for(let i=1;i<rows.length;i++){
-    if(rows[i][0]===body.username){
-      const cur = String(rows[i][4]||'').split(',').filter(Boolean);
-      const idx = cur.indexOf(body.perm);
-      if(body.checked && idx===-1) cur.push(body.perm);
-      if(!body.checked && idx>-1) cur.splice(idx,1);
-      sh.getRange(i+1,5).setValue(cur.join(','));
-      return {ok:true};
-    }
+function refreshDaftarAnggota() {
+  const tbody = document.getElementById('daftarAnggotaBody');
+  if (!db.anggota.length) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">👥</div><h3>Belum ada anggota</h3></div></td></tr>`;
+    return;
   }
-  return {ok:false};
+  tbody.innerHTML = db.anggota.map(a => `<tr>
+    <td><span class="badge badge-gray">${a.id}</span></td>
+    <td>${a.nama}</td>
+    <td>${a.tanggalGabung}</td>
+    <td><span class="badge ${a.status==='Aktif'?'badge-success':'badge-danger'}">${a.status}</span></td>
+  </tr>`).join('');
 }
 
-// MASTER sheet: header: name
-function readMaster(){
-  const sh = getSS().getSheetByName('MasterData'); if(!sh) return [];
-  const rows = sh.getDataRange().getValues(); rows.shift();
-  return rows.map(r=>({name:r[0]}));
+// ==================== INPUT ARISAN ====================
+function getAngkatanTerbuka() {
+  const allAngkatan = [1,2,3,4,5];
+  return allAngkatan.filter(n => {
+    const status = db.periodestatus[n] || 'Buka';
+    return status === 'Buka';
+  });
 }
 
-// DataInput sheet: header: penerima|penyetor|bulan|tahun|jumlah|kas_penerima|kas_panitia|metode|created
-function readInputs(){
-  const sh = getSS().getSheetByName('DataInput'); if(!sh) return [];
-  const rows = sh.getDataRange().getValues(); const header = rows.shift();
-  return rows.map(r=>({penerima:r[0],penyetor:r[1],bulan:r[2],tahun:r[3],jumlah:Number(r[4]||0),kas_penerima:Number(r[5]||0),kas_panitia:Number(r[6]||0),metode:r[7]?String(r[7]).split('|'):[],created:r[8]}));
+function refreshInputAngkatan() {
+  const sel = document.getElementById('inputAngkatan');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">-- Pilih Angkatan --</option>';
+  getAngkatanTerbuka().forEach(n => {
+    sel.innerHTML += `<option value="${n}" ${val==n?'selected':''}>Angkatan ${n}</option>`;
+  });
 }
 
-function addInput(data){
-  const sh = getSS().getSheetByName('DataInput'); if(!sh) sh = getSS().insertSheet('DataInput');
-  if(sh.getLastRow()===0) sh.appendRow(['penerima','penyetor','bulan','tahun','jumlah','kas_penerima','kas_panitia','metode','created']);
-  sh.appendRow([data.penerima,data.penyetor,data.bulan,data.tahun,Number(data.jumlah||0),Number(data.kas_penerima||0),Number(data.kas_panitia||0),(data.metode||[]).join('|'),data.created||new Date().toISOString()]);
-  return {ok:true};
+function onAngkatanChange() {
+  refreshPenerimaDropdown();
+  refreshPenyetorDropdown();
+  refreshRiwayatSetoran();
 }
 
-// Pengeluaran sheet: header: tanggal|keterangan|nominal|created
-function readPengeluaran(){
-  const sh = getSS().getSheetByName('Pengeluaran'); if(!sh) return [];
-  const rows = sh.getDataRange().getValues(); rows.shift();
-  return rows.map(r=>({tanggal:r[0],ket:r[1],nominal:Number(r[2]||0),created:r[3]}));
+function getWinners() { return db.penerimaArisan.map(p => p.idPenerima); }
+
+function refreshPenerimaDropdown() {
+  const sel = document.getElementById('inputPenerima');
+  const ang = document.getElementById('inputAngkatan').value;
+  sel.innerHTML = '<option value="">-- Pilih Penerima --</option>';
+  // Check if angkatan already has a penerima
+  const existing = db.penerimaArisan.find(p => p.angkatan == ang);
+  if (existing) {
+    const anggota = db.anggota.find(a => a.id === existing.idPenerima);
+    sel.innerHTML = `<option value="${existing.idPenerima}" selected>${anggota ? anggota.nama : existing.idPenerima}</option>`;
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  const winners = getWinners();
+  db.anggota.filter(a => a.status === 'Aktif' && !winners.includes(a.id)).forEach(a => {
+    sel.innerHTML += `<option value="${a.id}">${a.nama}</option>`;
+  });
 }
 
-function addPengeluaran(data){
-  const sh = getSS().getSheetByName('Pengeluaran'); if(!sh) sh = getSS().insertSheet('Pengeluaran');
-  if(sh.getLastRow()===0) sh.appendRow(['tanggal','keterangan','nominal','created']);
-  sh.appendRow([data.tanggal,data.ket,Number(data.nominal||0),data.created||new Date().toISOString()]);
-  return {ok:true};
+function refreshPenyetorDropdown() {
+  const sel = document.getElementById('inputPenyetor');
+  const ang = document.getElementById('inputAngkatan').value;
+  sel.innerHTML = '<option value="">-- Pilih Penyetor --</option>';
+  if (!ang) return;
+  const sudahSetor = db.setoranArisan.filter(s => s.angkatan == ang).map(s => s.idPenyetor);
+  db.anggota.filter(a => a.status === 'Aktif' && !sudahSetor.includes(a.id)).forEach(a => {
+    sel.innerHTML += `<option value="${a.id}">${a.nama}</option>`;
+  });
 }
 
-// Optional: onOpen initialize default admin user
-function onOpen(){
-  const ss = getSS(); if(!ss.getSheetByName('Users')){const sh = ss.insertSheet('Users'); sh.appendRow(['username','fullname','password','role','perms']); sh.appendRow(['admin','Administrator','admin123','admin','open,insert,update,delete']);}
+function catatSetoran() {
+  const ang = document.getElementById('inputAngkatan').value;
+  const penerima = document.getElementById('inputPenerima').value;
+  const tgl = document.getElementById('inputTanggalPutaran').value;
+  const penyetor = document.getElementById('inputPenyetor').value;
+  const metode = document.getElementById('inputMetode').value;
+  const setor = parseInt(document.getElementById('inputSetor').value) || 0;
+  const konsumsi = parseInt(document.getElementById('inputKonsumsi').value) || 0;
+  const kas = parseInt(document.getElementById('inputKas').value) || 0;
+
+  if (!ang || !penerima || !penyetor) { toast('Angkatan, Penerima, dan Penyetor wajib diisi!', 'error'); return; }
+
+  // Simpan penerima jika belum ada
+  if (!db.penerimaArisan.find(p => p.angkatan == ang)) {
+    const pnm = db.anggota.find(a => a.id === penerima);
+    db.penerimaArisan.push({
+      angkatan: parseInt(ang), idPenerima: penerima,
+      namaPenerima: pnm ? pnm.nama : penerima,
+      tanggal: tgl, statusPeriode: 'Buka'
+    });
+  }
+
+  const id = genId('TRX');
+  db.setoranArisan.push({
+    id, angkatan: parseInt(ang), idPenyetor: penyetor,
+    namaPenyetor: db.anggota.find(a=>a.id===penyetor)?.nama || penyetor,
+    jumlahSetor: setor, konsumsi, kas, metode,
+    tanggalInput: today(), operatorInput: currentUser.username
+  });
+  saveDB();
+  toast('✅ Iuran berhasil dicatat!', 'success');
+  // Reset bagian 2 only
+  document.getElementById('inputPenyetor').value = '';
+  document.getElementById('inputMetode').value = 'Cash';
+  document.getElementById('inputSetor').value = 100000;
+  document.getElementById('inputKonsumsi').value = 20000;
+  document.getElementById('inputKas').value = 5000;
+  refreshPenyetorDropdown();
+  refreshRiwayatSetoran();
+  refreshPenerimaDropdown();
 }
 
------ END OF Code.gs -----
+function refreshRiwayatSetoran() {
+  const ang = document.getElementById('inputAngkatan').value;
+  const tbody = document.getElementById('riwayatSetoranBody');
+  if (!ang) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">Pilih angkatan untuk melihat riwayat</td></tr>'; return; }
+  const data = db.setoranArisan.filter(s => s.angkatan == ang);
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">Belum ada setoran</td></tr>'; return; }
+  tbody.innerHTML = data.map(s => `<tr>
+    <td><code style="font-size:0.75rem;">${s.id}</code></td>
+    <td>${s.namaPenyetor}</td>
+    <td>${rupiah(s.jumlahSetor)}</td>
+    <td>${rupiah(s.konsumsi)}</td>
+    <td>${rupiah(s.kas)}</td>
+    <td><span class="badge ${s.metode==='Cash'?'badge-primary':'badge-warning'}">${s.metode}</span></td>
+    <td>${s.tanggalInput}</td>
+  </tr>`).join('');
+}
+
+// ==================== PROSES PERIODE ====================
+function updatePeriodeStatus() {
+  const ang = document.getElementById('periodeAngkatan').value;
+  const disp = document.getElementById('periodeStatusDisplay');
+  if (!ang) { disp.style.display='none'; return; }
+  disp.style.display = 'block';
+  const status = db.periodestatus[ang] || 'Buka';
+  const card = document.getElementById('periodeStatusCard');
+  const label = document.getElementById('periodeStatusLabel');
+  const badge = document.getElementById('periodeStatusBadge');
+  if (status === 'Buka') {
+    card.className = 'period-status-card open';
+    label.textContent = 'Status: Periode TERBUKA';
+    badge.textContent = 'Buka'; badge.className = 'badge badge-success';
+  } else {
+    card.className = 'period-status-card closed';
+    label.textContent = 'Status: Periode DITUTUP';
+    badge.textContent = 'Tutup'; badge.className = 'badge badge-gray';
+  }
+}
+
+function tutupPeriode() {
+  if (currentUser.username !== 'Administrator') {
+    toast('Akses Ditolak! Hanya user Administrator yang berhak mengatur status periode Angkatan.', 'error'); return;
+  }
+  const ang = document.getElementById('periodeAngkatan').value;
+  if (!ang) { toast('Pilih angkatan terlebih dahulu!', 'error'); return; }
+  db.periodestatus[ang] = 'Tutup';
+  saveDB();
+  updatePeriodeStatus();
+  refreshInputAngkatan();
+  refreshPeriodeRingkasan();
+  toast(`Periode Angkatan ${ang} berhasil ditutup!`, 'success');
+}
+
+function bukaPeriode() {
+  if (currentUser.username !== 'Administrator') {
+    toast('Akses Ditolak! Hanya user Administrator yang berhak mengatur status periode Angkatan.', 'error'); return;
+  }
+  const ang = document.getElementById('periodeAngkatan').value;
+  if (!ang) { toast('Pilih angkatan terlebih dahulu!', 'error'); return; }
+  db.periodestatus[ang] = 'Buka';
+  saveDB();
+  updatePeriodeStatus();
+  refreshInputAngkatan();
+  refreshPeriodeRingkasan();
+  toast(`Periode Angkatan ${ang} berhasil dibuka kembali!`, 'success');
+}
+
+function refreshPeriodeRingkasan() {
+  const tbody = document.getElementById('periodeRingkasanBody');
+  const angkatans = [1,2,3,4,5];
+  tbody.innerHTML = angkatans.map(n => {
+    const p = db.penerimaArisan.find(x => x.angkatan == n);
+    const jumlah = db.setoranArisan.filter(s => s.angkatan == n).length;
+    const status = db.periodestatus[n] || 'Buka';
+    return `<tr>
+      <td><b>Angkatan ${n}</b></td>
+      <td>${p ? p.namaPenerima : '<span style="color:var(--text-muted)">Belum ditentukan</span>'}</td>
+      <td>${jumlah} transaksi</td>
+      <td><span class="badge ${status==='Buka'?'badge-success':'badge-gray'}">${status}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ==================== PENGELUARAN ====================
+function simpanPengeluaran() {
+  const deskripsi = document.getElementById('keluarDeskripsi').value.trim();
+  const kategori = document.getElementById('keluarKategori').value;
+  const tanggal = document.getElementById('keluarTanggal').value;
+  const jumlah = parseInt(document.getElementById('keluarJumlah').value) || 0;
+  if (!deskripsi || !tanggal || !jumlah) { toast('Deskripsi, Tanggal, dan Jumlah wajib diisi!', 'error'); return; }
+  db.pengeluaran.push({
+    id: genId('KLR'), deskripsi, kategori, tanggal, jumlah,
+    operatorInput: currentUser.username
+  });
+  saveDB();
+  toast('Pengeluaran berhasil dicatat!', 'success');
+  document.getElementById('keluarDeskripsi').value = '';
+  document.getElementById('keluarJumlah').value = '';
+  document.getElementById('keluarTanggal').value = today();
+  refreshHistoriPengeluaran();
+}
+
+function refreshHistoriPengeluaran() {
+  const tbody = document.getElementById('historiPengeluaranBody');
+  if (!db.pengeluaran.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">💸</div><h3>Belum ada pengeluaran</h3></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = db.pengeluaran.map(k => `<tr>
+    <td><code style="font-size:0.75rem;">${k.id}</code></td>
+    <td>${k.deskripsi}</td>
+    <td><span class="badge badge-primary">${k.kategori}</span></td>
+    <td>${k.tanggal}</td>
+    <td><b>${rupiah(k.jumlah)}</b></td>
+    <td>${k.operatorInput}</td>
+    <td class="no-print">
+      <button class="btn btn-danger" style="padding:5px 10px;font-size:0.78rem;" onclick="hapusPengeluaran('${k.id}')">🗑️</button>
+    </td>
+  </tr>`).join('');
+}
+
+function hapusPengeluaran(id) {
+  if (currentUser.username !== 'Administrator') {
+    toast('Akses Ditolak! Hanya Administrator yang dapat menghapus transaksi pengeluaran.', 'error'); return;
+  }
+  db.pengeluaran = db.pengeluaran.filter(k => k.id !== id);
+  saveDB();
+  toast('Transaksi pengeluaran berhasil dihapus.', 'success');
+  refreshHistoriPengeluaran();
+}
+
+// ==================== LAPORAN ====================
+function tampilkanLaporan() {
+  const ang = document.getElementById('laporanAngkatan').value;
+  if (!ang) return;
+  const penerima = db.penerimaArisan.find(p => p.angkatan == ang);
+  const data = db.setoranArisan.filter(s => s.angkatan == ang);
+  document.getElementById('laporanRekapTitle').textContent = `Rekap Setoran Arisan – Angkatan ${ang}`;
+  const penInfo = document.getElementById('laporanPenerimaInfo');
+  if (penerima) {
+    penInfo.style.display = 'block';
+    document.getElementById('laporanPenerimaName').textContent = penerima.namaPenerima;
+    document.getElementById('laporanTanggal').textContent = penerima.tanggal;
+  } else { penInfo.style.display = 'none'; }
+
+  const tbody = document.getElementById('laporanRekapBody');
+  const tfoot = document.getElementById('laporanRekapFoot');
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">Belum ada data setoran untuk angkatan ini.</td></tr>';
+    tfoot.innerHTML = '';
+    return;
+  }
+
+  let totSetor=0, totKonsumsi=0, totKas=0, totDiterima=0;
+  tbody.innerHTML = data.map((s,i) => {
+    const diterima = s.jumlahSetor + s.konsumsi;
+    totSetor += s.jumlahSetor; totKonsumsi += s.konsumsi; totKas += s.kas; totDiterima += diterima;
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${s.namaPenyetor}</td>
+      <td>${rupiah(s.jumlahSetor)}</td>
+      <td>${rupiah(s.konsumsi)}</td>
+      <td>${rupiah(s.kas)}</td>
+      <td><b>${rupiah(diterima)}</b></td>
+      <td>${s.metode}</td>
+      <td>${s.tanggalInput}</td>
+    </tr>`;
+  }).join('');
+  tfoot.innerHTML = `<tr>
+    <td colspan="2" style="text-align:right;padding:10px 14px;">Total Kumulatif</td>
+    <td style="padding:10px 14px;">${rupiah(totSetor)}</td>
+    <td style="padding:10px 14px;">${rupiah(totKonsumsi)}</td>
+    <td style="padding:10px 14px;">${rupiah(totKas)}</td>
+    <td style="padding:10px 14px;">${rupiah(totDiterima)}</td>
+    <td colspan="2"></td>
+  </tr>`;
+}
+
+function refreshLaporanPengeluaran() {
+  const tbody = document.getElementById('laporanPengeluaranBody');
+  const tfoot = document.getElementById('laporanPengeluaranFoot');
+  const data = [...db.pengeluaran].sort((a,b) => a.tanggal.localeCompare(b.tanggal));
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);">Belum ada data pengeluaran.</td></tr>';
+    tfoot.innerHTML = '';
+    return;
+  }
+  let total = 0;
+  tbody.innerHTML = data.map(k => { total += k.jumlah; return `<tr>
+    <td><code style="font-size:0.75rem;">${k.id}</code></td>
+    <td>${k.deskripsi}</td>
+    <td>${k.kategori}</td>
+    <td>${k.tanggal}</td>
+    <td>${rupiah(k.jumlah)}</td>
+    <td>${k.operatorInput}</td>
+  </tr>`; }).join('');
+  tfoot.innerHTML = `<tr><td colspan="4" style="text-align:right;padding:10px 14px;">Total Pengeluaran</td><td style="padding:10px 14px;">${rupiah(total)}</td><td></td></tr>`;
+}
+
+function cetakPDF(contentId) {
+  const el = document.getElementById(contentId);
+  const opt = {
+    margin: [10, 10],
+    filename: contentId + '_' + today() + '.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+  };
+  html2pdf().set(opt).from(el).save();
+  toast('Mengekspor PDF...', 'success');
+}
+
+// ==================== PENGATURAN ====================
+function ubahPassword() {
+  const lama = document.getElementById('passLama').value;
+  const baru = document.getElementById('passBaru').value;
+  const konfirmasi = document.getElementById('passKonfirmasi').value;
+  if (!lama || !baru || !konfirmasi) { toast('Semua kolom wajib diisi!', 'error'); return; }
+  if (lama !== currentUser.password) { toast('Password lama tidak cocok!', 'error'); return; }
+  if (baru !== konfirmasi) { toast('Password baru dan konfirmasi tidak cocok!', 'error'); return; }
+  const idx = db.users.findIndex(u => u.username === currentUser.username);
+  db.users[idx].password = baru;
+  currentUser.password = baru;
+  saveDB();
+  toast('Password berhasil diubah!', 'success');
+  document.getElementById('passLama').value = '';
+  document.getElementById('passBaru').value = '';
+  document.getElementById('passKonfirmasi').value = '';
+}
+
+const menuList = ['Dashboard','Data Anggota','Input Arisan','Proses Periode','Pengeluaran','Laporan'];
+
+function buildAksesMatrix() {
+  const tbody = document.getElementById('aksesMatrixBody');
+  tbody.innerHTML = menuList.map(m => `<tr>
+    <td style="text-align:left;padding:8px 16px;">${m}</td>
+    <td><input type="checkbox" class="akses-check" data-menu="${m}" data-akses="View" checked></td>
+    <td><input type="checkbox" class="akses-check" data-menu="${m}" data-akses="Insert" checked></td>
+    <td><input type="checkbox" class="akses-check" data-menu="${m}" data-akses="Update"></td>
+    <td><input type="checkbox" class="akses-check" data-menu="${m}" data-akses="Delete"></td>
+  </tr>`).join('');
+}
+
+function simpanUserBaru() {
+  if (currentUser.username !== 'Administrator') { toast('Akses Ditolak!', 'error'); return; }
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newPassword').value;
+  if (!username || !password) { toast('Username dan password wajib diisi!', 'error'); return; }
+  if (db.users.find(u => u.username === username)) { toast('Username sudah terdaftar!', 'error'); return; }
+  const checks = document.querySelectorAll('.akses-check');
+  let aksesView=true, aksesInsert=false, aksesUpdate=false, aksesDelete=false;
+  checks.forEach(c => {
+    if (c.dataset.akses === 'View') aksesView = c.checked;
+    if (c.dataset.akses === 'Insert') aksesInsert = c.checked;
+    if (c.dataset.akses === 'Update') aksesUpdate = c.checked;
+    if (c.dataset.akses === 'Delete') aksesDelete = c.checked;
+  });
+  db.users.push({ username, password, aksesView, aksesInsert, aksesUpdate, aksesDelete });
+  saveDB();
+  toast(`User ${username} berhasil didaftarkan!`, 'success');
+  document.getElementById('newUsername').value = '';
+  document.getElementById('newPassword').value = '';
+  refreshDaftarUser();
+  refreshSalinAksesSelect();
+}
+
+function refreshSalinAksesSelect() {
+  const sel = document.getElementById('salinAksesFrom');
+  sel.innerHTML = '<option value="">-- Pilih User --</option>';
+  db.users.forEach(u => sel.innerHTML += `<option value="${u.username}">${u.username}</option>`);
+}
+
+function salinAkses() {
+  const from = document.getElementById('salinAksesFrom').value;
+  if (!from) { toast('Pilih user sumber!', 'warning'); return; }
+  const src = db.users.find(u => u.username === from);
+  if (!src) return;
+  document.querySelectorAll('.akses-check').forEach(c => {
+    if (c.dataset.akses === 'View') c.checked = src.aksesView;
+    if (c.dataset.akses === 'Insert') c.checked = src.aksesInsert;
+    if (c.dataset.akses === 'Update') c.checked = src.aksesUpdate;
+    if (c.dataset.akses === 'Delete') c.checked = src.aksesDelete;
+  });
+  toast(`Akses dari ${from} berhasil disalin!`, 'success');
+}
+
+function refreshDaftarUser() {
+  const tbody = document.getElementById('daftarUserBody');
+  tbody.innerHTML = db.users.map(u => `<tr>
+    <td><b>${u.username}</b></td>
+    <td>${u.aksesView ? '✅' : '❌'}</td>
+    <td>${u.aksesInsert ? '✅' : '❌'}</td>
+    <td>${u.aksesUpdate ? '✅' : '❌'}</td>
+    <td>${u.aksesDelete ? '✅' : '❌'}</td>
+  </tr>`).join('');
+}
+
+// ==================== INIT ====================
+loadDB();
+document.getElementById('regTanggal').value = today();
+document.getElementById('inputTanggalPutaran').value = today();
+document.getElementById('keluarTanggal').value = today();
+</script>
+
+<!-- 
+==========================================
+PANDUAN SETUP GOOGLE APPS SCRIPT (GAS)
+==========================================
+
+1. BUAT GOOGLE SPREADSHEET dengan 5 sheet:
+   - Anggota (kolom: ID_Anggota, Nama_Lengkap, Tanggal_Gabung, Status)
+   - Penerima_Arisan (kolom: Angkatan_Ke, ID_Penerima, Nama_Penerima, Tanggal_Penerimaan, Status_Periode)
+   - Setoran_Arisan (kolom: ID_Transaksi, Angkatan_Ke, ID_Penyetor, Nama_Penyetor, Jumlah_Setor, Konsumsi, Kas, Metode_Pembayaran, Tanggal_Input, Operator_Input)
+   - Pengeluaran (kolom: ID_Pengeluaran, Deskripsi, Kategori, Tanggal, Jumlah, Operator_Input)
+   - User_Pengaturan (kolom: Username, Password, Akses_View, Akses_Insert, Akses_Update, Akses_Delete)
+
+2. BUKA Extensions > Apps Script, paste kode berikut:
+
+---
+const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID';
+
+function doGet(e) {
+  const action = e.parameter.action;
+  if (action === 'getAll') {
+    return ContentService.createTextOutput(JSON.stringify(getAllData())).setMimeType(ContentService.MimeType.JSON);
+  }
+  return ContentService.createTextOutput('OK');
+}
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    syncAllData(data.data || data);
+    return ContentService.createTextOutput('OK');
+  } catch(err) {
+    return ContentService.createTextOutput('Error: ' + err.message);
+  }
+}
+
+function getAllData() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return {
+    anggota: sheetToArray(ss.getSheetByName('Anggota')),
+    penerimaArisan: sheetToArray(ss.getSheetByName('Penerima_Arisan')),
+    setoranArisan: sheetToArray(ss.getSheetByName('Setoran_Arisan')),
+    pengeluaran: sheetToArray(ss.getSheetByName('Pengeluaran')),
+    users: sheetToArray(ss.getSheetByName('User_Pengaturan'))
+  };
+}
+
+function sheetToArray(sheet) {
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  const headers = data[0];
+  return data.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = row[i]);
+    return obj;
+  });
+}
+
+function syncAllData(db) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  writeSheet(ss, 'Anggota', ['ID_Anggota','Nama_Lengkap','Tanggal_Gabung','Status'],
+    (db.anggota||[]).map(a => [a.id, a.nama, a.tanggalGabung, a.status]));
+  writeSheet(ss, 'Penerima_Arisan', ['Angkatan_Ke','ID_Penerima','Nama_Penerima','Tanggal_Penerimaan','Status_Periode'],
+    (db.penerimaArisan||[]).map(p => [p.angkatan, p.idPenerima, p.namaPenerima, p.tanggal, p.statusPeriode||'Buka']));
+  writeSheet(ss, 'Setoran_Arisan', ['ID_Transaksi','Angkatan_Ke','ID_Penyetor','Nama_Penyetor','Jumlah_Setor','Konsumsi','Kas','Metode_Pembayaran','Tanggal_Input','Operator_Input'],
+    (db.setoranArisan||[]).map(s => [s.id, s.angkatan, s.idPenyetor, s.namaPenyetor, s.jumlahSetor, s.konsumsi, s.kas, s.metode, s.tanggalInput, s.operatorInput]));
+  writeSheet(ss, 'Pengeluaran', ['ID_Pengeluaran','Deskripsi','Kategori','Tanggal','Jumlah','Operator_Input'],
+    (db.pengeluaran||[]).map(k => [k.id, k.deskripsi, k.kategori, k.tanggal, k.jumlah, k.operatorInput]));
+  writeSheet(ss, 'User_Pengaturan', ['Username','Password','Akses_View','Akses_Insert','Akses_Update','Akses_Delete'],
+    (db.users||[]).map(u => [u.username, u.password, u.aksesView, u.aksesInsert, u.aksesUpdate, u.aksesDelete]));
+}
+
+function writeSheet(ss, name, headers, rows) {
+  const sheet = ss.getSheetByName(name);
+  if (!sheet) return;
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (rows.length > 0) sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+}
+---
+
+3. Deploy sebagai Web App (Execute as: Me, Access: Anyone)
+4. Salin URL deployment, tempel ke variabel GAS_URL di file HTML ini (baris ~77)
+5. Deploy ke GitHub Pages untuk akses via link GitHub
+
+==========================================
 -->
 </body>
 </html>
-
